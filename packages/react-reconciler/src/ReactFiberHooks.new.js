@@ -935,6 +935,7 @@ function rerenderReducer<S, I, A>(
 
     const firstRenderPhaseUpdate = lastRenderPhaseUpdate.next;
     let update = firstRenderPhaseUpdate;
+    //不需要检查优先级
     do {
       // Process this render phase update. We don't have to check the
       // priority because it will always be the same as the current
@@ -1928,8 +1929,11 @@ function updateMemo<T>(
   return nextValue;
 }
 
+// 更新时候的useDeffedrValue
 function mountDeferredValue<T>(value: T): T {
+  // 调用mount时候的useState
   const [prevValue, setValue] = mountState(value);
+  //调用useEffect
   mountEffect(() => {
     const prevTransition = ReactCurrentBatchConfig.transition;
     ReactCurrentBatchConfig.transition = {};
@@ -1942,7 +1946,9 @@ function mountDeferredValue<T>(value: T): T {
   return prevValue;
 }
 
+//更新时候的useDeffedrValue
 function updateDeferredValue<T>(value: T): T {
+  // 调用update时候的useState，因为顺序是固定的，所以hooks对象能获取到一样的。
   const [prevValue, setValue] = updateState(value);
   updateEffect(() => {
     const prevTransition = ReactCurrentBatchConfig.transition;
