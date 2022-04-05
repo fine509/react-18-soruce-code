@@ -160,6 +160,7 @@ if (__DEV__) {
   Object.freeze(fakeInternalInstance);
 }
 
+// 执行类的getDerivedStateFromProps，返回值会合并老的state
 function applyDerivedStateFromProps(
   workInProgress: Fiber,
   ctor: any,
@@ -167,6 +168,7 @@ function applyDerivedStateFromProps(
   nextProps: any,
 ) {
   const prevState = workInProgress.memoizedState;
+  // 执行getDerivedStateFromProps
   let partialState = getDerivedStateFromProps(nextProps, prevState);
   if (__DEV__) {
     if (
@@ -184,10 +186,12 @@ function applyDerivedStateFromProps(
     warnOnUndefinedDerivedState(ctor, partialState);
   }
   // Merge the partial state and the previous state.
+  // getDerivedStateFromProps有返回值partialState，那么就跟之前的state进行合并
   const memoizedState =
     partialState === null || partialState === undefined
       ? prevState
       : assign({}, prevState, partialState);
+  // 将合并后的值重新赋值给fiber
   workInProgress.memoizedState = memoizedState;
 
   // Once the update queue is empty, persist the derived state onto the
@@ -199,6 +203,7 @@ function applyDerivedStateFromProps(
   }
 }
 
+// 每个类实例上的updater对象
 const classComponentUpdater = {
   isMounted,
   enqueueSetState(inst, payload, callback) {
@@ -579,9 +584,10 @@ function checkClassInstance(workInProgress: Fiber, ctor: any, newProps: any) {
   }
 }
 
+// 赋值类组件updater，并将实例挂载在fiber.stateNode上
 function adoptClassInstance(workInProgress: Fiber, instance: any): void {
-  instance.updater = classComponentUpdater;
-  workInProgress.stateNode = instance;
+  instance.updater = classComponentUpdater; // 每个类实例上都有一个updater对象，调用setState实际上是调用updater上的
+  workInProgress.stateNode = instance; //赋值fiber.stateNode
   // The instance needs access to the fiber so that it can schedule updates
   setInstance(instance, workInProgress);
   if (__DEV__) {
@@ -589,15 +595,20 @@ function adoptClassInstance(workInProgress: Fiber, instance: any): void {
   }
 }
 
+// 类组件创建实例
+// 做的事情：
+// 1 如果类上有静态属性contextType，获取context的value，通过context._currentValue
+// 2 直接new一个实例，初始化State，并且调用adoptClassInstance赋值类实例的updater对象
+// 3 返回实力
 function constructClassInstance(
   workInProgress: Fiber,
-  ctor: any,
+  ctor: any,  // 类本身
   props: any,
 ): any {
-  let isLegacyContextConsumer = false;
+  let isLegacyContextConsumer = false; //是否是ReactDOM.render的
   let unmaskedContext = emptyContextObject;
   let context = emptyContextObject;
-  const contextType = ctor.contextType;
+  const contextType = ctor.contextType; // context
 
   if (__DEV__) {
     if ('contextType' in ctor) {
@@ -642,7 +653,7 @@ function constructClassInstance(
   }
 
   if (typeof contextType === 'object' && contextType !== null) {
-    context = readContext((contextType: any));
+    context = readContext((contextType: any)); // 获取context._currentValue的值
   } else if (!disableLegacyContext) {
     unmaskedContext = getUnmaskedContext(workInProgress, ctor, true);
     const contextTypes = ctor.contextTypes;
@@ -653,7 +664,8 @@ function constructClassInstance(
       : emptyContextObject;
   }
 
-  let instance = new ctor(props, context);
+  // 创建类实例，执行contructor
+  let instance = new ctor(props, context); 
   // Instantiate twice to help detect side-effects.
   if (__DEV__) {
     if (
@@ -669,10 +681,13 @@ function constructClassInstance(
     }
   }
 
+  //初始化state
   const state = (workInProgress.memoizedState =
     instance.state !== null && instance.state !== undefined
       ? instance.state
       : null);
+
+  //赋值类实例updater对象，并将实例挂载在fiber.stateNode上面。
   adoptClassInstance(workInProgress, instance);
 
   if (__DEV__) {
@@ -764,6 +779,7 @@ function constructClassInstance(
     cacheContext(workInProgress, unmaskedContext, context);
   }
 
+  // 返回实例
   return instance;
 }
 
@@ -777,8 +793,10 @@ function callComponentWillMount(workInProgress, instance) {
     instance.UNSAFE_componentWillMount();
   }
 
+  //如果componentWillMount修改了state
   if (oldState !== instance.state) {
     if (__DEV__) {
+      // this.state已经弃用，请直接调用setState
       console.error(
         '%s.componentWillMount(): Assigning directly to this.state is ' +
           "deprecated (except inside a component's " +
@@ -823,6 +841,13 @@ function callComponentWillReceiveProps(
 }
 
 // Invokes the mount life-cycles on a previously never rendered instance.
+// 创建类实例后的操作
+// 主要做的事情：
+// 1. 初始化实例赋初值
+// 2. 初始化fiber的udpateQueue
+// 3. 有contextType赋值类实例的context属性
+// 4. 执行applyDerivedStateFromProps，返回值会与老的state进行合并。
+// 5 没有getDerivedStateFormProps和getSnapShorBeforeUpdate，就会执行componentWillMount
 function mountClassInstance(
   workInProgress: Fiber,
   ctor: any,
@@ -833,16 +858,19 @@ function mountClassInstance(
     checkClassInstance(workInProgress, ctor, newProps);
   }
 
+  // 给实例赋初值
   const instance = workInProgress.stateNode;
   instance.props = newProps;
   instance.state = workInProgress.memoizedState;
   instance.refs = emptyRefsObject;
 
+  // 初始化类fiber的updateQueue，跟hostRoot一样
   initializeUpdateQueue(workInProgress);
 
   const contextType = ctor.contextType;
   if (typeof contextType === 'object' && contextType !== null) {
-    instance.context = readContext(contextType);
+    // 如果有contextType，赋值实例的context属性 
+    instance.context = readContext(contextType); //从context._currentValue上获取context存储的state
   } else if (disableLegacyContext) {
     instance.context = emptyContextObject;
   } else {
@@ -881,6 +909,7 @@ function mountClassInstance(
 
   instance.state = workInProgress.memoizedState;
 
+  // 执行getDerivedStateFormProps，他是在state改变之前触发，他的返回值会作为新的state合并
   const getDerivedStateFromProps = ctor.getDerivedStateFromProps;
   if (typeof getDerivedStateFromProps === 'function') {
     applyDerivedStateFromProps(
@@ -894,6 +923,7 @@ function mountClassInstance(
 
   // In order to support react-lifecycles-compat polyfilled components,
   // Unsafe lifecycles should not be invoked for components using the new APIs.
+  // 只有不存在getDerivedStateFromProps和getSnapshotBeforeUpdate，才会触发componentWilMount
   if (
     typeof ctor.getDerivedStateFromProps !== 'function' &&
     typeof instance.getSnapshotBeforeUpdate !== 'function' &&
@@ -903,6 +933,7 @@ function mountClassInstance(
     callComponentWillMount(workInProgress, instance);
     // If we had additional state updates during this life-cycle, let's
     // process them now.
+    // 消费update
     processUpdateQueue(workInProgress, newProps, instance, renderLanes);
     instance.state = workInProgress.memoizedState;
   }

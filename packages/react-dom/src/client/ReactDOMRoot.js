@@ -89,6 +89,7 @@ function ReactDOMRoot(internalRoot: FiberRoot) {
   this._internalRoot = internalRoot;
 }
 
+//createRoot().render, 参数children就是<App/>
 ReactDOMHydrationRoot.prototype.render = ReactDOMRoot.prototype.render = function(
   children: ReactNodeList,
 ): void {
@@ -131,6 +132,8 @@ ReactDOMHydrationRoot.prototype.render = ReactDOMRoot.prototype.render = functio
       }
     }
   }
+
+  // 开始调度
   updateContainer(children, root, null, null);
 };
 
@@ -163,6 +166,7 @@ ReactDOMHydrationRoot.prototype.unmount = ReactDOMRoot.prototype.unmount = funct
   }
 };
 
+// 开启Concurrent mode
 export function createRoot(
   container: Element | DocumentFragment,
   options?: CreateRootOptions,
@@ -221,6 +225,7 @@ export function createRoot(
     }
   }
 
+  // 创建rootFiber和FiberRoot，并且将他们联系起来
   const root = createContainer(
     container,
     ConcurrentRoot,
@@ -239,6 +244,7 @@ export function createRoot(
       : container;
   listenToAllSupportedEvents(rootContainerElement);
 
+  // t返回一个ReactDOMRoot实例 render方法就在ReactDOMRoot的原型上。
   return new ReactDOMRoot(root);
 }
 

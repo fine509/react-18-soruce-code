@@ -243,6 +243,7 @@ function findHostInstanceWithWarning(
   return findHostInstance(component);
 }
 
+// 创建rooFiber和FiberRoot并且将他们联系起来。
 export function createContainer(
   containerInfo: Container,
   tag: RootTag,
@@ -317,15 +318,22 @@ export function createHydrationContainer(
   return root;
 }
 
+
+//创建好rootFiber和FiberRoot之后，调用render，开始调度。
+// 做的三件事情:
+// 1 创建mount的update
+// 2 将update插入RootFiber.updateQueue.shard.pending上
+// 3 调用scheduleUpdateOnFiber开启调度
 export function updateContainer(
-  element: ReactNodeList,
-  container: OpaqueRoot,
-  parentComponent: ?React$Component<any, any>,
-  callback: ?Function,
+  element: ReactNodeList, // <App/>
+  container: OpaqueRoot,  // FiberRoot
+  parentComponent: ?React$Component<any, any>, // null
+  callback: ?Function,  // null
 ): Lane {
   if (__DEV__) {
     onScheduleRoot(container, element);
   }
+  // current就是RootFiber
   const current = container.current;
   const eventTime = requestEventTime();
   const lane = requestUpdateLane(current);
@@ -358,9 +366,12 @@ export function updateContainer(
     }
   }
 
+  // 创建update
   const update = createUpdate(eventTime, lane);
   // Caution: React DevTools currently depends on this property
   // being called "element".
+
+  // 对于HostRoot，update的payload就是element
   update.payload = {element};
 
   callback = callback === undefined ? null : callback;
@@ -377,7 +388,10 @@ export function updateContainer(
     update.callback = callback;
   }
 
+  // 将update插入fiber.updateQueue上
   enqueueUpdate(current, update, lane);
+
+  // 开启调度
   const root = scheduleUpdateOnFiber(current, lane, eventTime);
   if (root !== null) {
     entangleTransitions(root, current, lane);

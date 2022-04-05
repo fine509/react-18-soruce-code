@@ -1077,10 +1077,11 @@ function updateFunctionComponent(
   return workInProgress.child;
 }
 
+// 类组件的beginWork
 function updateClassComponent(
-  current: Fiber | null,
-  workInProgress: Fiber,
-  Component: any,
+  current: Fiber | null, // 当前工作的节点
+  workInProgress: Fiber, //当前调度的节点
+  Component: any, //类本身
   nextProps: any,
   renderLanes: Lanes,
 ) {
@@ -1145,10 +1146,13 @@ function updateClassComponent(
   }
   prepareToReadContext(workInProgress, renderLanes);
 
+  // 取出类实例
   const instance = workInProgress.stateNode;
-  let shouldUpdate;
+  let shouldUpdate; //判断是否更新
+  // 没有实例
   if (instance === null) {
     if (current !== null) {
+      // updat的时候
       // A class component without an instance only mounts if it suspended
       // inside a non-concurrent tree, in an inconsistent state. We want to
       // treat it like a new mount, even though an empty version of it already
@@ -1163,6 +1167,7 @@ function updateClassComponent(
     mountClassInstance(workInProgress, Component, nextProps, renderLanes);
     shouldUpdate = true;
   } else if (current === null) {
+    // 有实例，但是是mount阶段
     // In a resume, we'll already have an instance we can reuse.
     shouldUpdate = resumeMountClassInstance(
       workInProgress,
@@ -1171,6 +1176,7 @@ function updateClassComponent(
       renderLanes,
     );
   } else {
+    // 有实例，并且是update阶段
     shouldUpdate = updateClassInstance(
       current,
       workInProgress,
@@ -1179,6 +1185,7 @@ function updateClassComponent(
       renderLanes,
     );
   }
+  //为儿子创建fiber节点并且连接起来
   const nextUnitOfWork = finishClassComponent(
     current,
     workInProgress,
@@ -1203,19 +1210,26 @@ function updateClassComponent(
   return nextUnitOfWork;
 }
 
+//类组件初始化或者update后执行的操作
+// 做的事情：
+// 1.不管mount或者update，还是shouldCOmponentUpdate返回False，都需要更新ref
+// 2.调用类实例的render方法，获取返回的vdom
+// 3. 调用reconcilerChildren，根据vdom创建子fiber，并且将他与类fiber连接起来，返回子fiber
 function finishClassComponent(
-  current: Fiber | null,
-  workInProgress: Fiber,
-  Component: any,
-  shouldUpdate: boolean,
+  current: Fiber | null, //当前工作的fiber 
+  workInProgress: Fiber, //当前调度的fiber
+  Component: any, // 类本身
+  shouldUpdate: boolean, //是否应该update
   hasContext: boolean,
   renderLanes: Lanes,
 ) {
   // Refs should update even if shouldComponentUpdate returns false
+  //不管mount还是Update, 或者shouldComponentUpdate返回false，也需要更新ref
   markRef(current, workInProgress);
 
   const didCaptureError = (workInProgress.flags & DidCapture) !== NoFlags;
 
+  // 不需要更新
   if (!shouldUpdate && !didCaptureError) {
     // Context providers should defer to sCU for rendering
     if (hasContext) {
@@ -1225,6 +1239,7 @@ function finishClassComponent(
     return bailoutOnAlreadyFinishedWork(current, workInProgress, renderLanes);
   }
 
+  // 需要更新
   const instance = workInProgress.stateNode;
 
   // Rerender
@@ -1264,6 +1279,7 @@ function finishClassComponent(
       }
       setIsRendering(false);
     } else {
+      // 调用render方法，获取返回的vdom
       nextChildren = instance.render();
     }
     if (enableSchedulingProfiler) {
@@ -1274,6 +1290,7 @@ function finishClassComponent(
   // React DevTools reads this flag.
   workInProgress.flags |= PerformedWork;
   if (current !== null && didCaptureError) {
+    // update阶段
     // If we're recovering from an error, reconcile without reusing any of
     // the existing children. Conceptually, the normal children and the children
     // that are shown on error are two different sets, so we shouldn't reuse
@@ -1285,6 +1302,7 @@ function finishClassComponent(
       renderLanes,
     );
   } else {
+    // 传入render返回的vdom，根据vdom创建fiber，并且与类fiber连接起来。
     reconcileChildren(current, workInProgress, nextChildren, renderLanes);
   }
 
@@ -1297,6 +1315,7 @@ function finishClassComponent(
     invalidateContextProvider(workInProgress, Component, true);
   }
 
+  // 返回子fiber
   return workInProgress.child;
 }
 
@@ -3433,12 +3452,14 @@ export function checkIfWorkInProgressReceivedUpdate() {
   return didReceiveUpdate;
 }
 
+// 不需要重新更新的类组件
 function bailoutOnAlreadyFinishedWork(
   current: Fiber | null,
   workInProgress: Fiber,
   renderLanes: Lanes,
 ): Fiber | null {
   if (current !== null) {
+    // Update阶段
     // Reuse previous dependencies
     workInProgress.dependencies = current.dependencies;
   }
@@ -3468,8 +3489,8 @@ function bailoutOnAlreadyFinishedWork(
     }
   }
 
-  // This fiber doesn't have work, but its subtree does. Clone the child
-  // fibers and continue.
+  // 当前的fiber不需要工作，但是他的儿子需要。
+  // clone子fiber
   cloneChildFibers(current, workInProgress);
   return workInProgress.child;
 }
@@ -3771,10 +3792,12 @@ function attemptEarlyBailoutIfNoScheduledUpdate(
   return bailoutOnAlreadyFinishedWork(current, workInProgress, renderLanes);
 }
 
+
+//开启每个fiber的递阶段
 function beginWork(
-  current: Fiber | null,
-  workInProgress: Fiber,
-  renderLanes: Lanes,
+  current: Fiber | null, // 当前工作的节点 
+  workInProgress: Fiber, //当前调度的节点
+  renderLanes: Lanes, 
 ): Fiber | null {
   if (__DEV__) {
     if (workInProgress._debugNeedsRemount && current !== null) {
@@ -3795,6 +3818,7 @@ function beginWork(
   }
 
   if (current !== null) {
+    // update阶段
     const oldProps = current.memoizedProps;
     const newProps = workInProgress.pendingProps;
 
@@ -3866,8 +3890,10 @@ function beginWork(
   // move this assignment out of the common path and into each branch.
   workInProgress.lanes = NoLanes;
 
+  // 根据不同的tag调用不同的方法
   switch (workInProgress.tag) {
     case IndeterminateComponent: {
+      // 所有函数组件在第一次执行的时候都是这个IndeterminateComponent、
       return mountIndeterminateComponent(
         current,
         workInProgress,
@@ -3899,7 +3925,9 @@ function beginWork(
         renderLanes,
       );
     }
+    // 处理类组件
     case ClassComponent: {
+      // 类本身
       const Component = workInProgress.type;
       const unresolvedProps = workInProgress.pendingProps;
       const resolvedProps =
@@ -3915,6 +3943,7 @@ function beginWork(
       );
     }
     case HostRoot:
+      // 对于rootFiber，调用这个
       return updateHostRoot(current, workInProgress, renderLanes);
     case HostComponent:
       return updateHostComponent(current, workInProgress, renderLanes);
