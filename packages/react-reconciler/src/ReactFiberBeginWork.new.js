@@ -284,6 +284,7 @@ if (__DEV__) {
   didWarnAboutDefaultPropsOnFunctionComponent = {};
 }
 
+// 创建子fiber，并且连接起来
 export function reconcileChildren(
   current: Fiber | null,
   workInProgress: Fiber,
@@ -291,6 +292,7 @@ export function reconcileChildren(
   renderLanes: Lanes,
 ) {
   if (current === null) {
+    // mount阶段
     // If this is a fresh new component that hasn't been rendered yet, we
     // won't update its child set by applying minimal side-effects. Instead,
     // we will add them all to the child before it gets rendered. That means
@@ -302,6 +304,7 @@ export function reconcileChildren(
       renderLanes,
     );
   } else {
+    // update
     // If the current child is the same as the work in progress, it means that
     // we haven't yet started any work on these children. Therefore, we use
     // the clone algorithm to create a copy of all the current children.
@@ -309,9 +312,9 @@ export function reconcileChildren(
     // If we had any progressed work already, that is invalid at this point so
     // let's throw it out.
     workInProgress.child = reconcileChildFibers(
-      workInProgress,
-      current.child,
-      nextChildren,
+      workInProgress, // 调度的儿子
+      current.child, //页面上的fiber的儿子
+      nextChildren, //即将创建fiber子vdom
       renderLanes,
     );
   }
@@ -1482,9 +1485,10 @@ function mountHostRootWithoutHydrating(
   return workInProgress.child;
 }
 
+// 处理div p标签等fiber
 function updateHostComponent(
-  current: Fiber | null,
-  workInProgress: Fiber,
+  current: Fiber | null, // 页面上的节点 
+  workInProgress: Fiber, // 调度的节点
   renderLanes: Lanes,
 ) {
   pushHostContext(workInProgress);
@@ -1493,11 +1497,13 @@ function updateHostComponent(
     tryToClaimNextHydratableInstance(workInProgress);
   }
 
-  const type = workInProgress.type;
-  const nextProps = workInProgress.pendingProps;
-  const prevProps = current !== null ? current.memoizedProps : null;
+  const type = workInProgress.type; // div
+  const nextProps = workInProgress.pendingProps; //更新后的props
+  const prevProps = current !== null ? current.memoizedProps : null; //当前的Props
 
-  let nextChildren = nextProps.children;
+  let nextChildren = nextProps.children; // <div>123</div>中的123 {children: 123}
+
+  //优化措施，对于只有一个子文本节点的children，不会创建fiber
   const isDirectTextChild = shouldSetTextContent(type, nextProps);
 
   if (isDirectTextChild) {
@@ -1505,7 +1511,7 @@ function updateHostComponent(
     // case. We won't handle it as a reified child. We will instead handle
     // this in the host environment that also has access to this prop. That
     // avoids allocating another HostText fiber and traversing it.
-    nextChildren = null;
+    nextChildren = null; // 设为Null，不创建子fiber
   } else if (prevProps !== null && shouldSetTextContent(type, prevProps)) {
     // If we're switching from a direct text child to a normal child, or to
     // empty, we need to schedule the text content to be reset.
@@ -1513,6 +1519,7 @@ function updateHostComponent(
   }
 
   markRef(current, workInProgress);
+  //创建子fiber
   reconcileChildren(current, workInProgress, nextChildren, renderLanes);
   return workInProgress.child;
 }
@@ -3945,6 +3952,7 @@ function beginWork(
     case HostRoot:
       // 对于rootFiber，调用这个
       return updateHostRoot(current, workInProgress, renderLanes);
+    // 处理div p的fiber
     case HostComponent:
       return updateHostComponent(current, workInProgress, renderLanes);
     case HostText:

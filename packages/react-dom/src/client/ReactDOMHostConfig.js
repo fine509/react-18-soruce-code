@@ -244,12 +244,13 @@ export function resetAfterCommit(containerInfo: Container): void {
   selectionInformation = null;
 }
 
+// 创建Dom
 export function createInstance(
-  type: string,
-  props: Props,
-  rootContainerInstance: Container,
-  hostContext: HostContext,
-  internalInstanceHandle: Object,
+  type: string, // div
+  props: Props, //props
+  rootContainerInstance: Container, // root div
+  hostContext: HostContext, 
+  internalInstanceHandle: Object, // fiber
 ): Instance {
   let parentNamespace: string;
   if (__DEV__) {
@@ -271,6 +272,7 @@ export function createInstance(
   } else {
     parentNamespace = ((hostContext: any): HostContextProd);
   }
+  // 创建dom
   const domElement: Instance = createElement(
     type,
     props,

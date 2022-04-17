@@ -214,16 +214,17 @@ if (supportsMutation) {
   // Mutation mode
 
   appendAllChildren = function(
-    parent: Instance,
-    workInProgress: Fiber,
+    parent: Instance, // 当前dom元素
+    workInProgress: Fiber, // fiber
     needsVisibilityToggle: boolean,
     isHidden: boolean,
   ) {
     // We only have the top Fiber that was created but we need recurse down its
     // children to find all the terminal nodes.
-    let node = workInProgress.child;
-    while (node !== null) {
-      if (node.tag === HostComponent || node.tag === HostText) {
+    let node = workInProgress.child; 
+    while (node !== null) { //开始遍历child
+      if (node.tag === HostComponent || node.tag === HostText) { 
+        // 如果是div或者文本节点这些，直接插入
         appendInitialChild(parent, node.stateNode);
       } else if (node.tag === HostPortal) {
         // If we have a portal child, then we don't want to traverse
@@ -237,6 +238,7 @@ if (supportsMutation) {
       if (node === workInProgress) {
         return;
       }
+      // 兄弟节点为空
       while (node.sibling === null) {
         if (node.return === null || node.return === workInProgress) {
           return;
@@ -649,14 +651,16 @@ function cutOffTailIfNeeded(
   }
 }
 
+// 函数组件，类组件的归阶段执行函数
+/**
+ * 
+ */
 function bubbleProperties(completedWork: Fiber) {
   const didBailout =
     completedWork.alternate !== null &&
     completedWork.alternate.child === completedWork.child;
-
   let newChildLanes = NoLanes;
   let subtreeFlags = NoFlags;
-
   if (!didBailout) {
     // Bubble up the earliest expiration time.
     if (enableProfilerTimer && (completedWork.mode & ProfileMode) !== NoMode) {
@@ -691,9 +695,10 @@ function bubbleProperties(completedWork: Fiber) {
       completedWork.actualDuration = actualDuration;
       completedWork.treeBaseDuration = treeBaseDuration;
     } else {
-      let child = completedWork.child;
+      let child = completedWork.child; // DD类的儿子div
+      // 递归遍历每个儿子合并优先级。
       while (child !== null) {
-        newChildLanes = mergeLanes(
+        newChildLanes = mergeLanes( // 合并优先级
           newChildLanes,
           mergeLanes(child.lanes, child.childLanes),
         );
@@ -709,7 +714,6 @@ function bubbleProperties(completedWork: Fiber) {
         child = child.sibling;
       }
     }
-
     completedWork.subtreeFlags |= subtreeFlags;
   } else {
     // Bubble up the earliest expiration time.
@@ -763,9 +767,7 @@ function bubbleProperties(completedWork: Fiber) {
 
     completedWork.subtreeFlags |= subtreeFlags;
   }
-
   completedWork.childLanes = newChildLanes;
-
   return didBailout;
 }
 
@@ -828,6 +830,7 @@ export function completeSuspendedOffscreenHostContainer(
   bubbleProperties(workInProgress);
 }
 
+// 每个fiber的归阶段入口
 function completeWork(
   current: Fiber | null,
   workInProgress: Fiber,
@@ -850,17 +853,24 @@ function completeWork(
     case Profiler:
     case ContextConsumer:
     case MemoComponent:
+      // 函数组件等执行这个
       bubbleProperties(workInProgress);
       return null;
     case ClassComponent: {
-      const Component = workInProgress.type;
+      //类组件执行这个
+      const Component = workInProgress.type; // DD类
       if (isLegacyContextProvider(Component)) {
         popLegacyContext(workInProgress);
       }
+      // 跟函数组件一样
       bubbleProperties(workInProgress);
       return null;
     }
     case HostRoot: {
+      // rootFiber
+      /**
+       * 
+       */
       const fiberRoot = (workInProgress.stateNode: FiberRoot);
       if (enableCache) {
         popRootTransition(fiberRoot, renderLanes);
@@ -916,15 +926,25 @@ function completeWork(
           }
         }
       }
+      // 关键函数
       updateHostContainer(current, workInProgress);
+      // 合并优先级
       bubbleProperties(workInProgress);
       return null;
     }
     case HostComponent: {
+      /**
+         1. 创建dom，挂载到fiber.stateNode
+         2. 调用appendAllChildren，将自己子fiber的stateNode插入到创建的dom上
+         3. 如果有ref，处理ref
+       */
+      // 原生div p标签等fiber
       popHostContext(workInProgress);
+      // 获取挂载的element 即 <div id="root"/>的元素
       const rootContainerInstance = getRootHostContainer();
-      const type = workInProgress.type;
-      if (current !== null && workInProgress.stateNode != null) {
+      const type = workInProgress.type; // div
+      if (current !== null && workInProgress.stateNode != null) { 
+        // update阶段并且有dom元素
         updateHostComponent(
           current,
           workInProgress,
@@ -937,7 +957,9 @@ function completeWork(
           markRef(workInProgress);
         }
       } else {
+        // mount阶段
         if (!newProps) {
+          //如果没有props
           if (workInProgress.stateNode === null) {
             throw new Error(
               'We must have new props for new mounts. This error is likely ' +
@@ -971,6 +993,7 @@ function completeWork(
             markUpdate(workInProgress);
           }
         } else {
+          // 创建dom元素
           const instance = createInstance(
             type,
             newProps,
@@ -979,8 +1002,10 @@ function completeWork(
             workInProgress,
           );
 
+          //关键函数，将自己儿子的dom插到自己身上
           appendAllChildren(instance, workInProgress, false, false);
 
+          //将dom挂载在fiber.stateNode
           workInProgress.stateNode = instance;
 
           // Certain renderers require commit-time effects for initial mount.
@@ -1000,6 +1025,7 @@ function completeWork(
         }
 
         if (workInProgress.ref !== null) {
+          // 有ref元素
           // If there is a ref on a host node we need to schedule a callback
           markRef(workInProgress);
         }

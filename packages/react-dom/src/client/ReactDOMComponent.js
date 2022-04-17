@@ -368,11 +368,12 @@ function updateDOMProperties(
   }
 }
 
+// 创建dom
 export function createElement(
-  type: string,
+  type: string, // div
   props: Object,
-  rootContainerElement: Element | Document | DocumentFragment,
-  parentNamespace: string,
+  rootContainerElement: Element | Document | DocumentFragment, // root div
+  parentNamespace: string, // fiber
 ): Element {
   let isCustomComponentTag;
 

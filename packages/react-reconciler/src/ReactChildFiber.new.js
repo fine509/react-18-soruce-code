@@ -1257,10 +1257,11 @@ function ChildReconciler(shouldTrackSideEffects) {
   // This API will tag the children with the side-effect of the reconciliation
   // itself. They will be added to the side-effect list as we pass through the
   // children and the parent.
+  // reconcilerChildren都是调用这个
   function reconcileChildFibers(
     returnFiber: Fiber,
     currentFirstChild: Fiber | null,
-    newChild: any,
+    newChild: any, 
     lanes: Lanes,
   ): Fiber | null {
     // This function is not recursive.
@@ -1271,6 +1272,7 @@ function ChildReconciler(shouldTrackSideEffects) {
     // Handle top level unkeyed fragments as if they were arrays.
     // This leads to an ambiguity between <>{[...]}</> and <>...</>.
     // We treat the ambiguous cases above the same.
+    // 处理Fragment或者<></>
     const isUnkeyedTopLevelFragment =
       typeof newChild === 'object' &&
       newChild !== null &&

@@ -935,6 +935,7 @@ function performConcurrentWorkOnRoot(root, didTimeout) {
   let exitStatus = shouldTimeSlice
     ? renderRootConcurrent(root, lanes)
     : renderRootSync(root, lanes);
+    // 退出去的状态不等于进行中的状态的时候
   if (exitStatus !== RootInProgress) {
     if (exitStatus === RootErrored) {
       // If something threw an error, try rendering one more time. We'll
@@ -965,6 +966,7 @@ function performConcurrentWorkOnRoot(root, didTimeout) {
       // unwound the stack.
       markRootSuspended(root, lanes);
     } else {
+      //最后就是5，完成的状态
       // The render completed.
 
       // Check if this render may have yielded to a concurrent event, and if so,
@@ -973,7 +975,7 @@ function performConcurrentWorkOnRoot(root, didTimeout) {
       // to the main thread, if it was fast enough, or if it expired. We could
       // skip the consistency check in that case, too.
       const renderWasConcurrent = !includesBlockingLane(root, lanes);
-      const finishedWork: Fiber = (root.current.alternate: any);
+      const finishedWork: Fiber = (root.current.alternate: any); // 已经完成调度的rootFiber
       if (
         renderWasConcurrent &&
         !isRenderConsistentWithExternalStores(finishedWork)
@@ -1003,7 +1005,7 @@ function performConcurrentWorkOnRoot(root, didTimeout) {
 
       // We now have a consistent tree. The next step is either to commit it,
       // or, if something suspended, wait to commit it after a timeout.
-      root.finishedWork = finishedWork;
+      root.finishedWork = finishedWork; // 挂载到FiberRoot上
       root.finishedLanes = lanes;
 
       //完成了render阶段之后，开启commit阶段
@@ -1017,9 +1019,14 @@ function performConcurrentWorkOnRoot(root, didTimeout) {
   if (root.callbackNode === originalCallbackNode) {
     // The task node scheduled for this root is the same one that's
     // currently executed. Need to return a continuation.
+    // performConcurrentWorkOnRoot是ScheduleCallback注册的函数，而ScheduleCallback执行的时候，需要通过返回来确定该任务是否继续执行
+    // 这里通过ensureRootIsScheduled调度之后，发现root上面挂载的任务还是当前这个任务，表示当前的任务依然是最高优先级的。
+    // 所以，需要返回当前的任务给ScheduleCallback，以表示当前任务依然是最高优先级，需要执行。
     return performConcurrentWorkOnRoot.bind(null, root);
   }
-  //如果有更高优先级的，或者任务都执行完毕了。
+  //当调用ensureRootIsScheduled调度之后，如果有更高优先级的，或者任务都执行完毕了，那么这里返回null给scheduleCallback
+  // 表示当前任务已经结束，当Schedule执行注册的函数performConcurrentWorkOnRoot，结果是Null的时候，他会认为该任务已经结束。
+  // 会将该任务从最小堆中取出，然后继续调度，看有没有更高优先级的任务，注意，Schedule和React里面有各自的调度系统
   return null;
 }
 
@@ -1870,6 +1877,10 @@ function workLoopConcurrent() {
 }
 
 // 进入render阶段的
+/**
+ * 每个fiber执行完一次beginWork的时候，就会判断是否有多余时间。
+ * 但是归阶段是一次性的，除非有节点还没执行beginWork
+ */
 function performUnitOfWork(unitOfWork: Fiber): void {
   // The current, flushed, state of this fiber is the alternate. Ideally
   // nothing should rely on this, but relying on it here means that we don't
@@ -1899,16 +1910,17 @@ function performUnitOfWork(unitOfWork: Fiber): void {
   ReactCurrentOwner.current = null;
 }
 
+// 归阶段
 function completeUnitOfWork(unitOfWork: Fiber): void {
   // Attempt to complete the current unit of work, then move to the next
   // sibling. If there are no more siblings, return to the parent fiber.
-  let completedWork = unitOfWork;
-  do {
+  let completedWork = unitOfWork; 
+  do { // while循环执行completeWork
     // The current, flushed, state of this fiber is the alternate. Ideally
     // nothing should rely on this, but relying on it here means that we don't
     // need an additional field on the work in progress.
-    const current = completedWork.alternate;
-    const returnFiber = completedWork.return;
+    const current = completedWork.alternate; // 当前fiber对应的页面上的fiber
+    const returnFiber = completedWork.return; //当前fiber的父fiber
 
     // Check if the work completed or if something threw.
     if ((completedWork.flags & Incomplete) === NoFlags) {
@@ -1930,7 +1942,7 @@ function completeUnitOfWork(unitOfWork: Fiber): void {
       if (next !== null) {
         // Completing this fiber spawned new work. Work on that next.
         workInProgress = next;
-        return;
+        return; // 如果
       }
     } else {
       // This fiber did not complete because something threw. Pop values off
@@ -1982,11 +1994,11 @@ function completeUnitOfWork(unitOfWork: Fiber): void {
 
     const siblingFiber = completedWork.sibling;
     if (siblingFiber !== null) {
-      // If there is more work to do in this returnFiber, do that next.
+      // 如果有兄弟节点，就退出completWOrk，执行兄弟节点的beginWork
       workInProgress = siblingFiber;
       return;
     }
-    // Otherwise, return to the parent
+    //否则返回returnFiber，继续执行completeWork
     completedWork = returnFiber;
     // Update the next thing we're working on in case something throws.
     workInProgress = completedWork;
