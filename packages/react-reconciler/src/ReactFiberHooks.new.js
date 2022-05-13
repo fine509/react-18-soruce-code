@@ -1700,6 +1700,7 @@ function updateEffectImpl(fiberFlags, hookFlags, create, deps): void {
   );
 }
 
+// useEffect mount
 function mountEffect(
   create: () => (() => void) | void,
   deps: Array<mixed> | void | null,

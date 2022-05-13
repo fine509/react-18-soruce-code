@@ -2010,29 +2010,50 @@ function completeUnitOfWork(unitOfWork: Fiber): void {
   }
 }
 
+// commit阶段的入口
+/**
+ * 
+ * @param {*} root  FiberRoot
+ * @param {*} recoverableErrors 
+ * @returns 
+ */
 function commitRoot(root: FiberRoot, recoverableErrors: null | Array<mixed>) {
   // TODO: This no longer makes any sense. We already wrap the mutation and
   // layout phases. Should be able to remove.
-  const previousUpdateLanePriority = getCurrentUpdatePriority();
+  const previousUpdateLanePriority = getCurrentUpdatePriority(); // 获取当前优先级保存
   const prevTransition = ReactCurrentBatchConfig.transition;
 
   try {
     ReactCurrentBatchConfig.transition = null;
-    setCurrentUpdatePriority(DiscreteEventPriority);
+    setCurrentUpdatePriority(DiscreteEventPriority); // 修改当前优先级
     commitRootImpl(root, recoverableErrors, previousUpdateLanePriority);
   } finally {
     ReactCurrentBatchConfig.transition = prevTransition;
-    setCurrentUpdatePriority(previousUpdateLanePriority);
+    setCurrentUpdatePriority(previousUpdateLanePriority); //恢复之前的优先级
   }
 
   return null;
 }
 
+// commit阶段的主要方法
+/**
+ * 1 开始执行dom操作之前，将所有effects执行完毕。
+ * 2 before-mutation之前的阶段，全局变量重置，调度useEffect
+ * 3 before-mutation阶段，调用commitBeforeMutationEffects
+ * 4 mutation阶段，调用commitMutationEffects
+ * 5 layout阶段, 调用commitLayoutEffects
+ * 6 layout之后阶段，如果有useEffect的effects，就赋值给全局变量rootWithPendingPassiveEffects，useEffect的调度函数通过上面
+ * 去获取effectLists，执行对应的useEffects函数。调用ensureRootIsScheduled最后判断还有没有更新没执行
+ */
 function commitRootImpl(
   root: FiberRoot,
   recoverableErrors: null | Array<mixed>,
   renderPriorityLevel: EventPriority
 ) {
+
+  // --------before-mutation-之前的阶段-start-------
+
+  // 执行effectList上的副作用，直到effectLists上值为null
   do {
     // `flushPassiveEffects` will call `flushSyncUpdateQueue` at the end, which
     // means `flushPassiveEffects` will sometimes result in additional
@@ -2042,14 +2063,15 @@ function commitRootImpl(
     // flush synchronous work at the end, to avoid factoring hazards like this.
     flushPassiveEffects();
   } while (rootWithPendingPassiveEffects !== null);
+
   flushRenderPhaseStrictModeWarningsInDEV();
 
   if ((executionContext & (RenderContext | CommitContext)) !== NoContext) {
     throw new Error("Should not already be working.");
   }
 
-  const finishedWork = root.finishedWork;
-  const lanes = root.finishedLanes;
+  const finishedWork = root.finishedWork; // rootFiber
+  const lanes = root.finishedLanes; //优先级
 
   if (__DEV__) {
     if (enableDebugTracing) {
@@ -2083,10 +2105,13 @@ function commitRootImpl(
       }
     }
   }
+
+  // 重置FiberRoot的属性
   root.finishedWork = null;
   root.finishedLanes = NoLanes;
 
   if (finishedWork === root.current) {
+    // root.current是current fiber, finishWork是workInprogress tree
     throw new Error(
       "Cannot commit the same tree as before. This error is likely caused by " +
         "a bug in React. Please file an issue."
@@ -2095,13 +2120,14 @@ function commitRootImpl(
 
   // commitRoot never returns a continuation; it always finishes synchronously.
   // So we can clear these now to allow a new callback to be scheduled.
+  // 重置变量
   root.callbackNode = null;
   root.callbackPriority = NoLane;
 
   // Update the first and last pending times on this root. The new first
   // pending time is whatever is left on the root fiber.
   let remainingLanes = mergeLanes(finishedWork.lanes, finishedWork.childLanes);
-  markRootFinished(root, remainingLanes);
+  markRootFinished(root, remainingLanes); // 标识Root已经完成
 
   if (root === workInProgressRoot) {
     // We can reset these now that they are finished.
@@ -2114,6 +2140,7 @@ function commitRootImpl(
     // times out.
   }
 
+  // 开始调度useEffect
   // If there are pending passive effects, schedule a callback to process them.
   // Do this as early as possible, so it is queued before anything else that
   // might get scheduled in the commit phase. (See #16714.)
@@ -2126,7 +2153,7 @@ function commitRootImpl(
     if (!rootDoesHavePassiveEffects) {
       rootDoesHavePassiveEffects = true;
       pendingPassiveEffectsRemainingLanes = remainingLanes;
-      scheduleCallback(NormalSchedulerPriority, () => {
+      scheduleCallback(NormalSchedulerPriority, () => { // 以普通优先级调度useEffect
         flushPassiveEffects();
         // This render triggered passive effects: release the root cache pool
         // *after* passive effects fire to avoid freeing a cache pool that may
@@ -2136,11 +2163,16 @@ function commitRootImpl(
     }
   }
 
+
+  // --------before-mutation-之前的阶段-end-------
+
+
   // Check if there are any effects in the whole tree.
   // TODO: This is left over from the effect list implementation, where we had
   // to check for the existence of `firstEffect` to satisfy Flow. I think the
   // only other reason this optimization exists is because it affects profiling.
   // Reconsider whether this is necessary.
+  // 判断是否有effects影响需要更新
   const subtreeHasEffects =
     (finishedWork.subtreeFlags &
       (BeforeMutationMask | MutationMask | LayoutMask | PassiveMask)) !==
@@ -2169,6 +2201,7 @@ function commitRootImpl(
     // The first phase a "before mutation" phase. We use this phase to read the
     // state of the host tree right before we mutate it. This is where
     // getSnapshotBeforeUpdate is called.
+    // -----------------beforeMutation阶段------------------
     const shouldFireAfterActiveInstanceBlur = commitBeforeMutationEffects(
       root,
       finishedWork
@@ -2186,6 +2219,7 @@ function commitRootImpl(
       rootCommittingMutationOrLayoutEffects = root;
     }
 
+    // ------------mutation阶段------------------
     // The next phase is the mutation phase, where we mutate the host tree.
     commitMutationEffects(root, finishedWork, lanes);
 
@@ -2200,6 +2234,7 @@ function commitRootImpl(
     // the mutation phase, so that the previous tree is still current during
     // componentWillUnmount, but before the layout phase, so that the finished
     // work is current during componentDidMount/Update.
+    // 切换RootFiber.current
     root.current = finishedWork;
 
     // The next phase is the layout phase, where we call effects that read
@@ -2213,6 +2248,8 @@ function commitRootImpl(
     if (enableSchedulingProfiler) {
       markLayoutEffectsStarted(lanes);
     }
+
+    //  ------------layout阶段----------------
     commitLayoutEffects(finishedWork, root, lanes);
     if (__DEV__) {
       if (enableDebugTracing) {
@@ -2248,9 +2285,10 @@ function commitRootImpl(
     }
   }
 
+  // -------------------layout之后--start-------------------
   const rootDidHavePassiveEffects = rootDoesHavePassiveEffects;
 
-  if (rootDoesHavePassiveEffects) {
+  if (rootDoesHavePassiveEffects) { // 有useEffect的effects
     // This commit has passive effects. Stash a reference to them. But don't
     // schedule a callback until after flushing layout work.
     rootDoesHavePassiveEffects = false;
@@ -2406,6 +2444,7 @@ function releaseRootPooledCache(root: FiberRoot, remainingLanes: Lanes) {
   }
 }
 
+// 执行useEffect
 export function flushPassiveEffects(): boolean {
   // Returns whether passive effects were flushed.
   // TODO: Combine this check with the one in flushPassiveEFfectsImpl. We should

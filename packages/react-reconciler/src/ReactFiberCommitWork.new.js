@@ -552,6 +552,7 @@ function commitHookEffectListUnmount(
   }
 }
 
+// 调用useEffect create
 function commitHookEffectListMount(flags: HookFlags, finishedWork: Fiber) {
   const updateQueue: FunctionComponentUpdateQueue | null = (finishedWork.updateQueue: any);
   const lastEffect = updateQueue !== null ? updateQueue.lastEffect : null;
@@ -568,7 +569,7 @@ function commitHookEffectListMount(flags: HookFlags, finishedWork: Fiber) {
           }
         }
 
-        // Mount
+        // Mount 执行useEffect的create函数
         const create = effect.create;
         effect.destroy = create();
 
