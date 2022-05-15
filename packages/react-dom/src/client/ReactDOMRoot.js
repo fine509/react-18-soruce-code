@@ -347,13 +347,17 @@ export function isValidContainer(node: any): boolean {
 
 // TODO: Remove this function which also includes comment nodes.
 // We only use it in places that are currently more relaxed.
+// 判断是否hi合法的容器
+/**
+ * 
+ */
 export function isValidContainerLegacy(node: any): boolean {
   return !!(
     node &&
-    (node.nodeType === ELEMENT_NODE ||
-      node.nodeType === DOCUMENT_NODE ||
-      node.nodeType === DOCUMENT_FRAGMENT_NODE ||
-      (node.nodeType === COMMENT_NODE &&
+    (node.nodeType === ELEMENT_NODE || //可以实元素节点
+      node.nodeType === DOCUMENT_NODE || //可以是document节点
+      node.nodeType === DOCUMENT_FRAGMENT_NODE || //可以是文档碎片节点
+      (node.nodeType === COMMENT_NODE && //可以是注释节点，但是内容必须是 react-mount-point-unstable 
         (node: any).nodeValue === ' react-mount-point-unstable '))
   );
 }

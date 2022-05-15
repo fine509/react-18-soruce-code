@@ -335,7 +335,9 @@ export function updateContainer(
   }
   // current就是RootFiber
   const current = container.current;
+  // 获取当前react应用初始化的时间
   const eventTime = requestEventTime();
+  // 获取优先级
   const lane = requestUpdateLane(current);
 
   if (enableSchedulingProfiler) {
@@ -343,6 +345,7 @@ export function updateContainer(
   }
 
   const context = getContextForSubtree(parentComponent);
+
   if (container.context === null) {
     container.context = context;
   } else {
@@ -410,6 +413,7 @@ export {
   flushPassiveEffects,
 };
 
+// render方法调用
 export function getPublicRootInstance(
   container: OpaqueRoot,
 ): React$Component<any, any> | PublicInstance | null {

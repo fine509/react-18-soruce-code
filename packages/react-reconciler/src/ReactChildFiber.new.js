@@ -359,6 +359,7 @@ function ChildReconciler(shouldTrackSideEffects) {
     }
   }
 
+  // 要不要加上placement的tags，mount的时候统一不加, update才加
   function placeSingleChild(newFiber: Fiber): Fiber {
     // This is simpler for the single child case. We only need to do a
     // placement for inserting new children.
@@ -747,6 +748,7 @@ function ChildReconciler(shouldTrackSideEffects) {
     return knownKeys;
   }
 
+  // 处理子元素是数组的情况
   function reconcileChildrenArray(
     returnFiber: Fiber,
     currentFirstChild: Fiber | null,
@@ -781,13 +783,20 @@ function ChildReconciler(shouldTrackSideEffects) {
       }
     }
 
+    // 存储的第一个子节点fiber对象
     let resultingFirstChild: Fiber | null = null;
+
+    // 上一个创建的子fiber对象，用于循环创建子元素作为索引
     let previousNewFiber: Fiber | null = null;
 
+    // current fiber树上对应的子节点
     let oldFiber = currentFirstChild;
+
     let lastPlacedIndex = 0;
     let newIdx = 0;
     let nextOldFiber = null;
+
+    // mount oldFiber为Null
     for (; oldFiber !== null && newIdx < newChildren.length; newIdx++) {
       if (oldFiber.index > newIdx) {
         nextOldFiber = oldFiber;
@@ -833,6 +842,7 @@ function ChildReconciler(shouldTrackSideEffects) {
       oldFiber = nextOldFiber;
     }
 
+    // mount的时候0 === 子元素的长度？
     if (newIdx === newChildren.length) {
       // We've reached the end of the new children. We can delete the rest.
       deleteRemainingChildren(returnFiber, oldFiber);
@@ -843,19 +853,24 @@ function ChildReconciler(shouldTrackSideEffects) {
       return resultingFirstChild;
     }
 
+    // 初次渲染
     if (oldFiber === null) {
       // If we don't have any more existing children we can choose a fast path
       // since the rest will all be insertions.
+      // 执行这个循环
       for (; newIdx < newChildren.length; newIdx++) {
+        // 创建新的子fiber
         const newFiber = createChild(returnFiber, newChildren[newIdx], lanes);
         if (newFiber === null) {
           continue;
         }
         lastPlacedIndex = placeChild(newFiber, lastPlacedIndex, newIdx);
         if (previousNewFiber === null) {
+          // 如果是第一个子元素，就赋值给resultingFirstChild
           // TODO: Move out of the loop. This only happens for the first run.
           resultingFirstChild = newFiber;
         } else {
+          // 不是第一个子元素，就要跟上一个子元素通过sibling建立关联
           previousNewFiber.sibling = newFiber;
         }
         previousNewFiber = newFiber;
@@ -864,6 +879,7 @@ function ChildReconciler(shouldTrackSideEffects) {
         const numberOfForks = newIdx;
         pushTreeFork(returnFiber, numberOfForks);
       }
+      // 返回大儿子
       return resultingFirstChild;
     }
 
@@ -1141,9 +1157,9 @@ function ChildReconciler(shouldTrackSideEffects) {
   }
 
   function reconcileSingleElement(
-    returnFiber: Fiber,
-    currentFirstChild: Fiber | null,
-    element: ReactElement,
+    returnFiber: Fiber, // 父亲fiber
+    currentFirstChild: Fiber | null, //current fiber上面的第一个儿子
+    element: ReactElement, //vdom
     lanes: Lanes,
   ): Fiber {
     const key = element.key;
@@ -1211,8 +1227,10 @@ function ChildReconciler(shouldTrackSideEffects) {
       created.return = returnFiber;
       return created;
     } else {
+      // 根据vdom创建fiber
       const created = createFiberFromElement(element, returnFiber.mode, lanes);
       created.ref = coerceRef(returnFiber, currentFirstChild, element);
+      // 连接父亲
       created.return = returnFiber;
       return created;
     }
@@ -1259,10 +1277,10 @@ function ChildReconciler(shouldTrackSideEffects) {
   // children and the parent.
   // reconcilerChildren都是调用这个
   function reconcileChildFibers(
-    returnFiber: Fiber,
-    currentFirstChild: Fiber | null,
-    newChild: any, 
-    lanes: Lanes,
+    returnFiber: Fiber, // 父级fiber对象
+    currentFirstChild: Fiber | null, //旧的第一个子fiber
+    newChild: any,  //新的vdom对象
+    lanes: Lanes, //优先级
   ): Fiber | null {
     // This function is not recursive.
     // If the top level item is an array, we treat it as a set of children,
@@ -1272,6 +1290,7 @@ function ChildReconciler(shouldTrackSideEffects) {
     // Handle top level unkeyed fragments as if they were arrays.
     // This leads to an ambiguity between <>{[...]}</> and <>...</>.
     // We treat the ambiguous cases above the same.
+
     // 处理Fragment或者<></>
     const isUnkeyedTopLevelFragment =
       typeof newChild === 'object' &&
@@ -1286,7 +1305,9 @@ function ChildReconciler(shouldTrackSideEffects) {
     if (typeof newChild === 'object' && newChild !== null) {
       switch (newChild.$$typeof) {
         case REACT_ELEMENT_TYPE:
+          // 判断新创建的子fiber要不要加上placement标记，mount不加。
           return placeSingleChild(
+            // 通过vdom创建子fiber并且关联父亲fiber
             reconcileSingleElement(
               returnFiber,
               currentFirstChild,
@@ -1317,7 +1338,9 @@ function ChildReconciler(shouldTrackSideEffects) {
           }
       }
 
+      // 多个儿子
       if (isArray(newChild)) {
+        // 遍历创建每一个儿子，并且通过指针关联起来。
         return reconcileChildrenArray(
           returnFiber,
           currentFirstChild,
@@ -1338,6 +1361,7 @@ function ChildReconciler(shouldTrackSideEffects) {
       throwOnInvalidObjectType(returnFiber, newChild);
     }
 
+    // 处理文本节点
     if (
       (typeof newChild === 'string' && newChild !== '') ||
       typeof newChild === 'number'

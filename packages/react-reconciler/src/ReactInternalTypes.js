@@ -7,7 +7,7 @@
  * @flow
  */
 
-import type {Source} from 'shared/ReactElementType';
+import type { Source } from "shared/ReactElementType";
 import type {
   RefObject,
   ReactContext,
@@ -17,36 +17,36 @@ import type {
   MutableSource,
   StartTransitionOptions,
   Wakeable,
-} from 'shared/ReactTypes';
-import type {SuspenseInstance} from './ReactFiberHostConfig';
-import type {WorkTag} from './ReactWorkTags';
-import type {TypeOfMode} from './ReactTypeOfMode';
-import type {Flags} from './ReactFiberFlags';
-import type {Lane, Lanes, LaneMap} from './ReactFiberLane.old';
-import type {RootTag} from './ReactRootTags';
-import type {TimeoutHandle, NoTimeout} from './ReactFiberHostConfig';
-import type {Cache} from './ReactFiberCacheComponent.old';
-import type {Transitions} from './ReactFiberTracingMarkerComponent.new';
+} from "shared/ReactTypes";
+import type { SuspenseInstance } from "./ReactFiberHostConfig";
+import type { WorkTag } from "./ReactWorkTags";
+import type { TypeOfMode } from "./ReactTypeOfMode";
+import type { Flags } from "./ReactFiberFlags";
+import type { Lane, Lanes, LaneMap } from "./ReactFiberLane.old";
+import type { RootTag } from "./ReactRootTags";
+import type { TimeoutHandle, NoTimeout } from "./ReactFiberHostConfig";
+import type { Cache } from "./ReactFiberCacheComponent.old";
+import type { Transitions } from "./ReactFiberTracingMarkerComponent.new";
 
 // Unwind Circular: moved from ReactFiberHooks.old
 export type HookType =
-  | 'useState'
-  | 'useReducer'
-  | 'useContext'
-  | 'useRef'
-  | 'useEffect'
-  | 'useInsertionEffect'
-  | 'useLayoutEffect'
-  | 'useCallback'
-  | 'useMemo'
-  | 'useImperativeHandle'
-  | 'useDebugValue'
-  | 'useDeferredValue'
-  | 'useTransition'
-  | 'useMutableSource'
-  | 'useSyncExternalStore'
-  | 'useId'
-  | 'useCacheRefresh';
+  | "useState"
+  | "useReducer"
+  | "useContext"
+  | "useRef"
+  | "useEffect"
+  | "useInsertionEffect"
+  | "useLayoutEffect"
+  | "useCallback"
+  | "useMemo"
+  | "useImperativeHandle"
+  | "useDebugValue"
+  | "useDeferredValue"
+  | "useTransition"
+  | "useMutableSource"
+  | "useSyncExternalStore"
+  | "useId"
+  | "useCacheRefresh";
 
 export type ContextDependency<T> = {
   context: ReactContext<T>,
@@ -74,55 +74,34 @@ export type Fiber = {|
   // alternate versions of the tree. We put this on a single object for now to
   // minimize the number of objects created during the initial render.
 
-  // Tag identifying the type of fiber.
+  /**-----------------实例相关---------------- */
+  // 标记不同的组件类型 ，比如函数组件是0，类组件是1....
   tag: WorkTag,
-
-  // Unique identifier of this child.
   key: null | string,
-
-  // The value of element.type which is used to preserve the identity during
-  // reconciliation of this child.
   elementType: any,
-
-  // The resolved function/class/ associated with this fiber.
+  // div p span class A{} function A(){} .....
   type: any,
-
-  // The local state associated with this fiber.
+  //实例 实例对象，比如类组件的实例，原生元素就是dom， funciton没有实例 rootFiber的stateNode是FiberRoot
   stateNode: any,
 
-  // Conceptual aliases
-  // parent : Instance -> return The parent happens to be the same as the
-  // return fiber since we've merged the fiber and instance.
-
-  // Remaining fields belong to Fiber
-
-  // The Fiber to return to after finishing processing this one.
-  // This is effectively the parent, but there can be multiple parents (two)
-  // so this is only the parent of the thing we're currently processing.
-  // It is conceptually the same as the return address of a stack frame.
-  return: Fiber | null,
-
-  // Singly Linked List Tree Structure.
-  child: Fiber | null,
-  sibling: Fiber | null,
+  /**-------- fiber相关--------- */
+  return: Fiber | null, //指向自己的父级fiber
+  child: Fiber | null, //指向大儿子fiber
+  sibling: Fiber | null, //指向兄弟节点fiber
   index: number,
+  // fiber工作一般在workInprogress fiber，为了实现复用， alternate指向当前current Fiber得对应的fiber
+  // 等到工作完毕，workInprogress fiber就变成current Fiber，以此循环
+  alternate: Fiber | null,
 
-  // The ref last used to attach this node.
-  // I'll avoid adding an owner field for prod and model that as functions.
   ref:
     | null
-    | (((handle: mixed) => void) & {_stringRef: ?string, ...})
+    | (((handle: mixed) => void) & { _stringRef: ?string, ... })
     | RefObject,
 
-  // Input is the data coming into process this fiber. Arguments. Props.
-  pendingProps: any, // This type will be more specific once we overload the tag.
-  memoizedProps: any, // The props used to create the output.
-
-  // A queue of state updates and callbacks.
-  updateQueue: mixed,
-
-  // The state used to create the output
-  memoizedState: any,
+  /**----------- 状态数据相关-------------- */
+  pendingProps: any, //  即将更新的Props
+  memoizedProps: any, // 旧的props
+  memoizedState: any, // 旧的state
 
   // Dependencies (contexts, events) for this fiber, if it has any
   dependencies: Dependencies | null,
@@ -133,29 +112,22 @@ export type Fiber = {|
   // parent. Additional flags can be set at creation time, but after that the
   // value should remain unchanged throughout the fiber's lifetime, particularly
   // before its child fibers are created.
-  mode: TypeOfMode,
+  mode: TypeOfMode,  //当前组件及子组件处于何种渲染模式， createRoot/render
 
-  // Effect
-  flags: Flags,
-  subtreeFlags: Flags,
-  deletions: Array<Fiber> | null,
-
-  // Singly linked list fast path to the next fiber with side-effects.
-  nextEffect: Fiber | null,
-
-  // The first and last fiber with side-effect within this subtree. This allows
-  // us to reuse a slice of the linked list when we reuse the work done within
-  // this fiber.
-  firstEffect: Fiber | null,
-  lastEffect: Fiber | null,
-
-  lanes: Lanes,
+  /**-------- Effect副作用相关-------------- */
+  updateQueue: mixed, //该Fiber对应的组件产生的状态会存放到这个队列，比如update对象
+  flags: Flags,  // effectTag标记，用来记录当前fiber要执行得DOM操作
+  subtreeFlags: Flags, 
+  deletions: Array<Fiber> | null, 
+  nextEffect: Fiber | null, // 单链表用来快速查找下一个sied effect
+  firstEffect: Fiber | null,// 子树中第一个side effect
+  lastEffect: Fiber | null, // 子树中最后一个last Effect
+  lanes: Lanes, // 优先级
   childLanes: Lanes,
 
   // This is a pooled version of a Fiber. Every fiber that gets updated will
   // eventually have a pair. There are cases when we can clean up pairs to save
   // memory if we need to.
-  alternate: Fiber | null,
 
   // Time spent rendering this Fiber and its descendants for the current update.
   // This tells us how well the tree makes use of sCU for memoization.
@@ -216,7 +188,7 @@ type BaseFiberRootProperties = {|
 
   // Used by useMutableSource hook to avoid tearing during hydration.
   mutableSourceEagerHydrationData?: Array<
-    MutableSource<any> | MutableSourceVersion,
+    MutableSource<any> | MutableSourceVersion
   > | null,
 
   // Node returned by Scheduler.scheduleCallback. Represents the next rendering
@@ -274,7 +246,7 @@ export type TransitionTracingCallbacks = {
     transitionName: string,
     startTime: number,
     currentTime: number,
-    pending: Array<{name: null | string}>,
+    pending: Array<{ name: null | string }>
   ) => void,
   onTransitionIncomplete?: (
     transitionName: string,
@@ -284,19 +256,19 @@ export type TransitionTracingCallbacks = {
       name?: string,
       newName?: string,
       endTime: number,
-    }>,
+    }>
   ) => void,
   onTransitionComplete?: (
     transitionName: string,
     startTime: number,
-    endTime: number,
+    endTime: number
   ) => void,
   onMarkerProgress?: (
     transitionName: string,
     marker: string,
     startTime: number,
     currentTime: number,
-    pending: Array<{name: null | string}>,
+    pending: Array<{ name: null | string }>
   ) => void,
   onMarkerIncomplete?: (
     transitionName: string,
@@ -307,13 +279,13 @@ export type TransitionTracingCallbacks = {
       name?: string,
       newName?: string,
       endTime: number,
-    }>,
+    }>
   ) => void,
   onMarkerComplete?: (
     transitionName: string,
     marker: string,
     startTime: number,
-    endTime: number,
+    endTime: number
   ) => void,
 };
 
@@ -334,8 +306,8 @@ export type FiberRoot = {
   ...
 };
 
-type BasicStateAction<S> = (S => S) | S;
-type Dispatch<A> = A => void;
+type BasicStateAction<S> = ((S) => S) | S;
+type Dispatch<A> = (A) => void;
 
 export type Dispatcher = {|
   getCacheSignal?: () => AbortSignal,
@@ -345,44 +317,44 @@ export type Dispatcher = {|
   useReducer<S, I, A>(
     reducer: (S, A) => S,
     initialArg: I,
-    init?: (I) => S,
+    init?: (I) => S
   ): [S, Dispatch<A>],
   useContext<T>(context: ReactContext<T>): T,
-  useRef<T>(initialValue: T): {|current: T|},
+  useRef<T>(initialValue: T): {| current: T |},
   useEffect(
     create: () => (() => void) | void,
-    deps: Array<mixed> | void | null,
+    deps: Array<mixed> | void | null
   ): void,
   useInsertionEffect(
     create: () => (() => void) | void,
-    deps: Array<mixed> | void | null,
+    deps: Array<mixed> | void | null
   ): void,
   useLayoutEffect(
     create: () => (() => void) | void,
-    deps: Array<mixed> | void | null,
+    deps: Array<mixed> | void | null
   ): void,
   useCallback<T>(callback: T, deps: Array<mixed> | void | null): T,
   useMemo<T>(nextCreate: () => T, deps: Array<mixed> | void | null): T,
   useImperativeHandle<T>(
-    ref: {|current: T | null|} | ((inst: T | null) => mixed) | null | void,
+    ref: {| current: T | null |} | ((inst: T | null) => mixed) | null | void,
     create: () => T,
-    deps: Array<mixed> | void | null,
+    deps: Array<mixed> | void | null
   ): void,
   useDebugValue<T>(value: T, formatterFn: ?(value: T) => mixed): void,
   useDeferredValue<T>(value: T): T,
   useTransition(): [
     boolean,
-    (callback: () => void, options?: StartTransitionOptions) => void,
+    (callback: () => void, options?: StartTransitionOptions) => void
   ],
   useMutableSource<Source, Snapshot>(
     source: MutableSource<Source>,
     getSnapshot: MutableSourceGetSnapshotFn<Source, Snapshot>,
-    subscribe: MutableSourceSubscribeFn<Source, Snapshot>,
+    subscribe: MutableSourceSubscribeFn<Source, Snapshot>
   ): Snapshot,
   useSyncExternalStore<T>(
     subscribe: (() => void) => () => void,
     getSnapshot: () => T,
-    getServerSnapshot?: () => T,
+    getServerSnapshot?: () => T
   ): T,
   useId(): string,
   useCacheRefresh?: () => <T>(?() => T, ?T) => void,

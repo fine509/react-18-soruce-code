@@ -126,6 +126,11 @@ function FiberRootNode(
 }
 
 // 创建FiebrRoot和rootFiber
+/**
+* 1 创建FIberRoot和rootFiber并且联系起来
+* 2 初始化rootFiber的state
+* 3 初始化rootFiber的updateQueue
+ */
 export function createFiberRoot(
   containerInfo: any,
   tag: RootTag,

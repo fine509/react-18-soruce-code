@@ -108,6 +108,7 @@ function noopOnRecoverableError() {
   // legacy API.
 }
 
+// render初次调用创建FiberRoot
 function legacyCreateRootFromDOMContainer(
   container: Container,
   initialChildren: ReactNodeList,
@@ -115,6 +116,7 @@ function legacyCreateRootFromDOMContainer(
   callback: ?Function,
   isHydrationContainer: boolean,
 ): FiberRoot {
+  // 是否为服务端渲染
   if (isHydrationContainer) {
     if (typeof callback === 'function') {
       const originalCallback = callback;
@@ -124,6 +126,7 @@ function legacyCreateRootFromDOMContainer(
       };
     }
 
+    //创建FiberRoot
     const root = createHydrationContainer(
       initialChildren,
       callback,
@@ -137,6 +140,7 @@ function legacyCreateRootFromDOMContainer(
       // TODO(luna) Support hydration later
       null,
     );
+    //容器上挂载root
     container._reactRootContainer = root;
     markContainerAsRoot(root.current, container);
 
@@ -148,11 +152,21 @@ function legacyCreateRootFromDOMContainer(
     return root;
   } else {
     // First clear any existing content.
-    let rootSibling;
+    let rootSibling; //存储contianer内部的子元素，将continer的内部清掉
     while ((rootSibling = container.lastChild)) {
+    // 为什么要清掉呢？
+    /**
+     * 有时候需要在container中放置一些展位图或者Loading图以提高首屏加载
+     * 无可避免的要向continaer加入html
+     * 在将ReactElement渲染到container之前，必须先清掉contianer的内容。
+     * 因为展位图和ReactElement不能同时显示
+     * 
+     * 在加入占位代码的时候，最后有一个父级元素，可以减少react内部循环次数提高性能。
+     */
       container.removeChild(rootSibling);
     }
 
+    // 改变callback的this指向，使其指向真实dom对象
     if (typeof callback === 'function') {
       const originalCallback = callback;
       callback = function() {
@@ -161,9 +175,10 @@ function legacyCreateRootFromDOMContainer(
       };
     }
 
+    // 创建FiberRoot
     const root = createContainer(
       container,
-      LegacyRoot,
+      LegacyRoot, //标识是同步渲染
       null, // hydrationCallbacks
       false, // isStrictMode
       false, // concurrentUpdatesByDefaultOverride,
@@ -171,6 +186,7 @@ function legacyCreateRootFromDOMContainer(
       noopOnRecoverableError, // onRecoverableError
       null, // transitionCallbacks
     );
+    // 容器上挂载root
     container._reactRootContainer = root;
     markContainerAsRoot(root.current, container);
 
@@ -179,7 +195,9 @@ function legacyCreateRootFromDOMContainer(
     listenToAllSupportedEvents(rootContainerElement);
 
     // Initial mount should not be batched.
+    // 初始化渲染优先级比较高，不应该分批处理。
     flushSync(() => {
+      // 进入调度阶段了
       updateContainer(initialChildren, root, parentComponent, callback);
     });
 
@@ -200,12 +218,17 @@ function warnOnInvalidCallback(callback: mixed, callerName: string): void {
   }
 }
 
+//render调用方法
+/** 
+ * 将子树渲染到容器中(初始化Fiber数据结构，擦黄就FiberRoot和rootFiber)
+ * parentComponent: 父组件，mount传入Null
+ * */ 
 function legacyRenderSubtreeIntoContainer(
-  parentComponent: ?React$Component<any, any>,
-  children: ReactNodeList,
-  container: Container,
-  forceHydrate: boolean,
-  callback: ?Function,
+  parentComponent: ?React$Component<any, any>, // mount是null
+  children: ReactNodeList, // ReactElement
+  container: Container,  //容器
+  forceHydrate: boolean,  
+  callback: ?Function, //回叼
 ) {
   if (__DEV__) {
     topLevelUpdateWarnings(container);
@@ -215,7 +238,7 @@ function legacyRenderSubtreeIntoContainer(
   const maybeRoot = container._reactRootContainer;
   let root: FiberRoot;
   if (!maybeRoot) {
-    // Initial mount
+    // Initial mount //初始化mount
     root = legacyCreateRootFromDOMContainer(
       container,
       children,
@@ -224,6 +247,7 @@ function legacyRenderSubtreeIntoContainer(
       forceHydrate,
     );
   } else {
+    // 第二次mount的时候
     root = maybeRoot;
     if (typeof callback === 'function') {
       const originalCallback = callback;
@@ -310,6 +334,14 @@ export function hydrate(
   );
 }
 
+// 同步模式
+/**
+ * 
+ * @param {*} element ReactElement, createElement的返回值
+ * @param {*} container  容器
+ * @param {*} callback  渲染后执行的回调函数
+ * @returns 
+ */
 export function render(
   element: React$Element<any>,
   container: Container,
@@ -324,6 +356,7 @@ export function render(
     );
   }
 
+  //判断是否是合法的容器
   if (!isValidContainerLegacy(container)) {
     throw new Error('Target container is not a DOM element.');
   }
@@ -340,6 +373,7 @@ export function render(
       );
     }
   }
+  // 初始化FiberRoot和rootFiber
   return legacyRenderSubtreeIntoContainer(
     null,
     element,

@@ -221,6 +221,7 @@ if (supportsMutation) {
   ) {
     // We only have the top Fiber that was created but we need recurse down its
     // children to find all the terminal nodes.
+    // 获取子元素
     let node = workInProgress.child; 
     while (node !== null) { //开始遍历child
       if (node.tag === HostComponent || node.tag === HostText) { 
@@ -231,21 +232,31 @@ if (supportsMutation) {
         // down its children. Instead, we'll get insertions from each child in
         // the portal directly.
       } else if (node.child !== null) {
+        // 如果组件不是ReactElement又不是文本，那么就将node视为组件，因为组件本身没有真实DOM
+        // 所以直接获取儿子
         node.child.return = node;
         node = node.child;
         continue;
       }
+
+      // 如果node已经等于workInProgress，表示已经同层了，那么所有的节点已经加入到了当前fiber下了
       if (node === workInProgress) {
         return;
       }
+
       // 兄弟节点为空
       while (node.sibling === null) {
+        // 如果子节点没有父级或者父级已经是自己，那么退出
         if (node.return === null || node.return === workInProgress) {
+         
           return;
         }
+        // 兄弟节点为空就返回上一级
         node = node.return;
       }
+      //将return更新到下一个兄弟身上，方便回退
       node.sibling.return = node.return;
+      //  将Node指针指向兄弟，要开始将兄弟的dom插入到父亲身上了。
       node = node.sibling;
     }
   };
@@ -836,6 +847,7 @@ function completeWork(
   workInProgress: Fiber,
   renderLanes: Lanes,
 ): Fiber | null {
+  // 获取待更新的props
   const newProps = workInProgress.pendingProps;
   // Note: This intentionally doesn't check if we're hydrating because comparing
   // to the current tree provider fiber is just as fast and less error-prone.

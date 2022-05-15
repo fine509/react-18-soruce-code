@@ -1337,6 +1337,7 @@ function pushHostRootContext(workInProgress) {
   pushHostContainer(workInProgress, root.containerInfo);
 }
 
+// 处理rootFiber
 function updateHostRoot(current, workInProgress, renderLanes) {
   pushHostRootContext(workInProgress);
 
@@ -1344,10 +1345,16 @@ function updateHostRoot(current, workInProgress, renderLanes) {
     throw new Error('Should have a current fiber. This is a bug in React.');
   }
 
+  // 获取新的props
   const nextProps = workInProgress.pendingProps;
+  // 获取上一次渲染使用的state
   const prevState = workInProgress.memoizedState;
+  // 获取上一次渲染使用的children
   const prevChildren = prevState.element;
+  // 浅复制更新队列，防止引用属性相互影响
+  // workInprogress.updateQueue浅拷贝current.updateQeueu
   cloneUpdateQueue(current, workInProgress);
+  // 处理update，获取updateQueue.payload并且赋值到wokrInprogress.memoizedState
   processUpdateQueue(workInProgress, nextProps, null, renderLanes);
 
   const nextState: RootState = workInProgress.memoizedState;
@@ -1372,6 +1379,7 @@ function updateHostRoot(current, workInProgress, renderLanes) {
 
   // Caution: React DevTools currently depends on this property
   // being called "element".
+  // 获取儿子节点
   const nextChildren = nextState.element;
   if (supportsHydration && prevState.isDehydrated) {
     // This is a hydration root whose shell has not yet hydrated. We should
@@ -1435,12 +1443,14 @@ function updateHostRoot(current, workInProgress, renderLanes) {
         }
       }
 
+      // 创建儿子
       const child = mountChildFibers(
         workInProgress,
         null,
         nextChildren,
         renderLanes,
       );
+      // 连接儿子节点</any>
       workInProgress.child = child;
 
       let node = child;
@@ -1462,8 +1472,10 @@ function updateHostRoot(current, workInProgress, renderLanes) {
     if (nextChildren === prevChildren) {
       return bailoutOnAlreadyFinishedWork(current, workInProgress, renderLanes);
     }
+    // 创建儿子，并且连接起来
     reconcileChildren(current, workInProgress, nextChildren, renderLanes);
   }
+  // 返回儿子fiber
   return workInProgress.child;
 }
 

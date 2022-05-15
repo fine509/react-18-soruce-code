@@ -211,17 +211,20 @@ export function createUpdate(eventTime: number, lane: Lane): Update<*> {
   return update;
 }
 
+// update插入到updateQueue上
 export function enqueueUpdate<State>(
   fiber: Fiber,
   update: Update<State>,
-  lane: Lane,
+  lane: Lane, // 优先级
 ) {
+  // 获取fiber的更新队列
   const updateQueue = fiber.updateQueue;
   if (updateQueue === null) {
     // Only occurs if the fiber has been unmounted.
     return;
   }
 
+  // 获取待执行的Update任务，初始化渲染没有待执行的任务
   const sharedQueue: SharedQueue<State> = (updateQueue: any).shared;
 
   if (isInterleavedUpdate(fiber, lane)) {
@@ -238,7 +241,9 @@ export function enqueueUpdate<State>(
     }
     sharedQueue.interleaved = update;
   } else {
+    // shard.pending存放着待执行的任务
     const pending = sharedQueue.pending;
+    // 以单向环状链表的形式存放update
     if (pending === null) {
       // This is the first update. Create a circular list.
       update.next = update;
@@ -455,6 +460,7 @@ function getStateFromUpdate<State>(
   return prevState;
 }
 
+// 处理update
 export function processUpdateQueue<State>(
   workInProgress: Fiber,
   props: any,
@@ -675,13 +681,14 @@ export function checkHasForceUpdateAfterProcessing(): boolean {
   return hasForceUpdate;
 }
 
+//调用render的第三个参数，回调函数，表示当前已经挂载完毕
 export function commitUpdateQueue<State>(
   finishedWork: Fiber,
   finishedQueue: UpdateQueue<State>,
   instance: any,
 ): void {
   // Commit the effects
-  const effects = finishedQueue.effects;
+  const effects = finishedQueue.effects; 
   finishedQueue.effects = null;
   if (effects !== null) {
     for (let i = 0; i < effects.length; i++) {

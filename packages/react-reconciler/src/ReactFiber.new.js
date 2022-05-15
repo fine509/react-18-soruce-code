@@ -125,38 +125,48 @@ function FiberNode(
   key: null | string,
   mode: TypeOfMode,
 ) {
-  // Instance
+
+  // Instance 实例相关的属性
+  // 标记不同的组件类型 ，比如函数组件是0，类组件是1....
   this.tag = tag;
+
   this.key = key;
   this.elementType = null;
+  // div span class A{}...
   this.type = null;
+  // 实例对象，比如类组件的实例，原生元素就是dom， funciton没有实例 rootFiber的stateNode是FiberRoot
   this.stateNode = null;
 
-  // Fiber
-  this.return = null;
-  this.child = null;
-  this.sibling = null;
+  // Fiber fiber相关的属性
+  this.return = null; //指向自己的父级fiber
+  this.child = null; //指向大儿子fiber
+  this.sibling = null; //指向兄弟节点fiber
   this.index = 0;
+
+ // fiber工作一般在workInprogress fiber，为了实现复用， alternate指向当前current Fiber得对应的fiber
+  // 等到工作完毕，workInprogress fiber就变成current Fiber，以此循环
+  this.alternate = null;
 
   this.ref = null;
 
-  this.pendingProps = pendingProps;
-  this.memoizedProps = null;
-  this.updateQueue = null;
-  this.memoizedState = null;
+  // 状态数据相关的
+  this.pendingProps = pendingProps; // 即将更新的Props
+  this.memoizedProps = null; //旧的props
+  this.memoizedState = null; // 旧得state
   this.dependencies = null;
 
-  this.mode = mode;
+  this.mode = mode; // 当前组件及子组件处于何种渲染模式
 
-  // Effects
-  this.flags = NoFlags;
+  // Effects 副作用相关的
+  this.updateQueue = null; //该Fiber对应的组件产生的状态会存放到这个队列，比如update对象
+  this.flags = NoFlags; // effectTag标记，用来记录当前fiber要执行得DOM操作
   this.subtreeFlags = NoFlags;
-  this.deletions = null;
+  this.deletions = null; // 删除得fiber
 
-  this.lanes = NoLanes;
+  this.lanes = NoLanes; // 优先级
   this.childLanes = NoLanes;
 
-  this.alternate = null;
+ 
 
   if (enableProfilerTimer) {
     // Note: The following is done to avoid a v8 performance cliff.
@@ -250,8 +260,9 @@ export function resolveLazyComponentTag(Component: Function): WorkTag {
 }
 
 // This is used to create an alternate fiber to do work on.
+// 创建workInporgress rootFiber
 export function createWorkInProgress(current: Fiber, pendingProps: any): Fiber {
-  let workInProgress = current.alternate;
+  let workInProgress = current.alternate; 
   if (workInProgress === null) {
     // We use a double buffering pooling technique because we know that we'll
     // only ever need at most two versions of a tree. We pool the "other" unused
@@ -264,6 +275,7 @@ export function createWorkInProgress(current: Fiber, pendingProps: any): Fiber {
       current.key,
       current.mode,
     );
+    // 属性复用
     workInProgress.elementType = current.elementType;
     workInProgress.type = current.type;
     workInProgress.stateNode = current.stateNode;
@@ -276,6 +288,7 @@ export function createWorkInProgress(current: Fiber, pendingProps: any): Fiber {
       workInProgress._debugHookTypes = current._debugHookTypes;
     }
 
+    // current fiber和workInrpogress fiber互相连接
     workInProgress.alternate = current;
     current.alternate = workInProgress;
   } else {
@@ -352,6 +365,7 @@ export function createWorkInProgress(current: Fiber, pendingProps: any): Fiber {
     }
   }
 
+  // 返回workINprogres
   return workInProgress;
 }
 
