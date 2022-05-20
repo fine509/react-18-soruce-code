@@ -396,9 +396,11 @@ export function renderWithHooks<Props, SecondArg>(
   workInProgress.updateQueue = null;
   workInProgress.lanes = NoLanes;
 
+  //可以看到，全局变量已经重置。
   // The following should have already been reset
-  // currentHook = null;
-  // workInProgressHook = null;
+  // 以下应该已经重置
+  // currentHook = null; //指向current fiber上面当前的hooks对象
+  // workInProgressHook = null; //指向WorkInprogress fiber当前hook对象，是一个环状链表。
 
   // didScheduleRenderPhaseUpdate = false;
   // localIdCounter = 0;
@@ -636,27 +638,34 @@ export function resetHooksAfterThrow(): void {
   localIdCounter = 0;
 }
 
+// 创建Hooks对象并且插入链表
 function mountWorkInProgressHook(): Hook {
   const hook: Hook = {
-    memoizedState: null,
+    memoizedState: null, // useState中 保存 state 信息 ｜ useEffect 中 保存着 effect 对象 ｜ useMemo 中 保存的是缓存的值和 deps ｜ useRef 中保存的是 ref 对象。
 
-    baseState: null,
-    baseQueue: null,
-    queue: null,
+    baseState: null,  //usestate和useReducer中,一次更新中 ，产生的最新state值。
+    baseQueue: null, //usestate和useReducer中 保存最新的更新队列，存放着因为优先级比较低跳过的update链表
+    queue: null,  //存放着本次更新相关的信息。
 
-    next: null,
+    next: null, //指针
   };
 
+  // 函数组件第一个hooks的时候，为空，通过workInProgressHook指针连接起整个函数组件的hooks链表。
   if (workInProgressHook === null) {
-    // This is the first hook in the list
+    // hooks链表第一个，挂载在fiber.memoizedState
     currentlyRenderingFiber.memoizedState = workInProgressHook = hook;
   } else {
-    // Append to the end of the list
+    // 插在上一个hook对象后面，形成链表
     workInProgressHook = workInProgressHook.next = hook;
   }
   return workInProgressHook;
 }
 
+// 通过上一个fiber获取hooks对象
+/**
+ * 通过current fibe.memoizedState获取到当前current fiber的hooks链表。
+ * 一个一个根据老的hooks复制新的hooks对象返回，复制的内容中有状态，queue代更新任务等。
+ */
 function updateWorkInProgressHook(): Hook {
   // This function is used both for updates and for re-renders triggered by a
   // render phase update. It assumes there is either a current hook we can
@@ -665,24 +674,34 @@ function updateWorkInProgressHook(): Hook {
   // the dispatcher used for mounts.
   let nextCurrentHook: null | Hook;
   if (currentHook === null) {
+    // 函数组件第一个hooks，为null。
+
+    // 获取current fiber
     const current = currentlyRenderingFiber.alternate;
     if (current !== null) {
+      // 从curentFiber上面获取mount时候创建的hook对象，现在nextCurrentHooks已经有一条完整的当前current fiber的hooks链表了
       nextCurrentHook = current.memoizedState;
     } else {
       nextCurrentHook = null;
     }
   } else {
+    // 第二次，直接从current fiber上往下取第二个hooks
     nextCurrentHook = currentHook.next;
   }
 
-  let nextWorkInProgressHook: null | Hook;
+  let nextWorkInProgressHook: null | Hook; //获取workInprogress fiber下一个hook
   if (workInProgressHook === null) {
+    // 函数组件第一个hooks执行的时候，为null
+    
+    //update时候， 获取workInprogress fiber上面第一个hooks对象，应该为null
     nextWorkInProgressHook = currentlyRenderingFiber.memoizedState;
   } else {
-    nextWorkInProgressHook = workInProgressHook.next;
+    // 直接往workInprogress fiber的next下获取
+    nextWorkInProgressHook = workInProgressHook.next; //null
   }
 
   if (nextWorkInProgressHook !== null) {
+    // 已经有值了，将nextWorkInProgressHook赋值给workInProgressHook去返回，
     // There's already a work-in-progress. Reuse it.
     workInProgressHook = nextWorkInProgressHook;
     nextWorkInProgressHook = workInProgressHook.next;
@@ -690,13 +709,16 @@ function updateWorkInProgressHook(): Hook {
     currentHook = nextCurrentHook;
   } else {
     // Clone from the current hook.
-
+    // update 第一次进来应该为null
+    // 第一次进来nextCurrentHooks不应该为null
     if (nextCurrentHook === null) {
       throw new Error('Rendered more hooks than during the previous render.');
     }
 
+    // 指向current fiber对应的hooks对象
     currentHook = nextCurrentHook;
 
+    // 从Curent fiber上面复制一个hooks给workInprogress fiber
     const newHook: Hook = {
       memoizedState: currentHook.memoizedState,
 
@@ -707,14 +729,17 @@ function updateWorkInProgressHook(): Hook {
       next: null,
     };
 
+    // update第一次为null 
     if (workInProgressHook === null) {
       // This is the first hook in the list.
+      // 将新创建的Hooks复制给wokrInprogress fiber的memoizedState，
       currentlyRenderingFiber.memoizedState = workInProgressHook = newHook;
     } else {
       // Append to the end of the list.
       workInProgressHook = workInProgressHook.next = newHook;
     }
   }
+  // 返回新创建的hooks
   return workInProgressHook;
 }
 
@@ -760,11 +785,13 @@ function mountReducer<S, I, A>(
   return [hook.memoizedState, dispatch];
 }
 
+// useState和useReducer的update函数
 function updateReducer<S, I, A>(
-  reducer: (S, A) => S,
-  initialArg: I,
+  reducer: (S, A) => S, //生成state的函数
+  initialArg: I, 
   init?: I => S,
 ): [S, Dispatch<A>] {
+  // 通过current fiber的Hooks对象，一个一个复制对应的hooks返回
   const hook = updateWorkInProgressHook();
   const queue = hook.queue;
 
@@ -1508,37 +1535,51 @@ function forceStoreRerender(fiber) {
   scheduleUpdateOnFiber(fiber, SyncLane, NoTimestamp);
 }
 
+// useState mount
 function mountState<S>(
   initialState: (() => S) | S,
 ): [S, Dispatch<BasicStateAction<S>>] {
+  // 创建hooks对象
   const hook = mountWorkInProgressHook();
+  // 函数执行
   if (typeof initialState === 'function') {
     // $FlowFixMe: Flow doesn't like mixed types
     initialState = initialState();
   }
+
+  // initState存放到hook对象上的memoizedState和baseState
   hook.memoizedState = hook.baseState = initialState;
+
+  // 创建queue对象，每个hooks都有一个queue对象，用来存放当前hooks产生的update等信息。
   const queue: UpdateQueue<S, BasicStateAction<S>> = {
-    pending: null,
-    interleaved: null,
-    lanes: NoLanes,
-    dispatch: null,
-    lastRenderedReducer: basicStateReducer,
+    pending: null, //存放update链表
+    interleaved: null, 
+    lanes: NoLanes, //优先级
+    dispatch: null, 
+    lastRenderedReducer: basicStateReducer, //存放reducer，useState是指定的，而useReducer是自定义的，所以说useState是特殊的useReducer
+    // 上一次render时候的update
     lastRenderedState: (initialState: any),
   };
   hook.queue = queue;
+  
+  // 派发action的函数，通过bind传入了当前的fiber，和Queue对象
   const dispatch: Dispatch<
     BasicStateAction<S>,
   > = (queue.dispatch = (dispatchSetState.bind(
     null,
-    currentlyRenderingFiber,
+    currentlyRenderingFiber, //函数的fiber
     queue,
   ): any));
+  // 返回初始化状态和dispatch
   return [hook.memoizedState, dispatch];
 }
 
+
+// useState的update函数
 function updateState<S>(
   initialState: (() => S) | S,
 ): [S, Dispatch<BasicStateAction<S>>] {
+  // 跟useReducer调用同样的函数，不过第一个
   return updateReducer(basicStateReducer, (initialState: any));
 }
 
@@ -1548,31 +1589,46 @@ function rerenderState<S>(
   return rerenderReducer(basicStateReducer, (initialState: any));
 }
 
+// useLayoutEffect/useEffect创建的effects
 function pushEffect(tag, create, destroy, deps) {
   const effect: Effect = {
-    tag,
-    create,
-    destroy,
-    deps,
+    tag, //layoutEffect和useEffect的标识
+    create, //创建函数
+    destroy, // 销毁函数
+    deps, //依赖项
     // Circular
-    next: (null: any),
+    next: (null: any), //effects会连接成为一个链表。
   };
+
+  // 获取函数组件fiber.updateQueue
   let componentUpdateQueue: null | FunctionComponentUpdateQueue = (currentlyRenderingFiber.updateQueue: any);
+
   if (componentUpdateQueue === null) {
-    componentUpdateQueue = createFunctionComponentUpdateQueue();
+    // 如果是第一个effects
+    //创建一个有LastEffect的对象
+    componentUpdateQueue = createFunctionComponentUpdateQueue(); // { lastEffect: null,  stores: null,};
+    // 将这个对象赋值到fiber.updateQueue上面
     currentlyRenderingFiber.updateQueue = (componentUpdateQueue: any);
+    // 接着将当前effect挂载到updateQueue.lastEffect上，以环状链表的形式
     componentUpdateQueue.lastEffect = effect.next = effect;
   } else {
+     // 第二个effects之后
+
+     // 获取之前创建的updateQueue.lastEffect，他永远指向最后一个effects
     const lastEffect = componentUpdateQueue.lastEffect;
+
     if (lastEffect === null) {
+      //如果是空，自己形成一个环状链表
       componentUpdateQueue.lastEffect = effect.next = effect;
     } else {
-      const firstEffect = lastEffect.next;
-      lastEffect.next = effect;
-      effect.next = firstEffect;
-      componentUpdateQueue.lastEffect = effect;
+      //否则，插入到上一个effects后面
+      const firstEffect = lastEffect.next; // lasEffect指向最后一个，那么.next就是第一个
+      lastEffect.next = effect; //插到最后一个后面
+      effect.next = firstEffect; //下一个指向第一个effects，形成环状
+      componentUpdateQueue.lastEffect = effect; //updateQueue.lastEffect永远指向最后一个effect
     }
   }
+  // 返回本次创建的effects
   return effect;
 }
 
@@ -1670,10 +1726,14 @@ function updateRef<T>(initialValue: T): {|current: T|} {
   return hook.memoizedState;
 }
 
+// useEffect/useLayoutEffect mount
 function mountEffectImpl(fiberFlags, hookFlags, create, deps): void {
+  // 创建Hooks
   const hook = mountWorkInProgressHook();
   const nextDeps = deps === undefined ? null : deps;
-  currentlyRenderingFiber.flags |= fiberFlags;
+  currentlyRenderingFiber.flags |= fiberFlags; //更新flags标记，commit阶段游泳
+
+  // useEffect/useLayoutEffect的hook.memoizedState = effect。并且effect通过链表的形式挂载到了fiber.updateQueue.lastEffect上面
   hook.memoizedState = pushEffect(
     HookHasEffect | hookFlags,
     create,
@@ -1756,6 +1816,7 @@ function updateInsertionEffect(
   return updateEffectImpl(UpdateEffect, HookInsertion, create, deps);
 }
 
+// layoutEffect mount
 function mountLayoutEffect(
   create: () => (() => void) | void,
   deps: Array<mixed> | void | null,
@@ -2212,10 +2273,16 @@ function dispatchReducerAction<S, A>(
   markUpdateInDevTools(fiber, lane, action);
 }
 
+// useState派发action的函数
+/**
+ *  1 创建update
+ *  2 插入hooks的update链表，主要在hook.queue.pending上
+ *  3 判断如果是第一次更新，提前计算最新的state，判断是否跟老的值一样，一样就不处理。
+ */
 function dispatchSetState<S, A>(
-  fiber: Fiber,
-  queue: UpdateQueue<S, A>,
-  action: A,
+  fiber: Fiber, //当前fiber
+  queue: UpdateQueue<S, A>, // 当前hooks的queue
+  action: A, //用户派发的值
 ) {
   if (__DEV__) {
     if (typeof arguments[3] === 'function') {
@@ -2229,20 +2296,25 @@ function dispatchSetState<S, A>(
 
   const lane = requestUpdateLane(fiber);
 
+  // 创建update对象
   const update: Update<S, A> = {
-    lane,
-    action,
-    hasEagerState: false,
+    lane, //优先级
+    action, //值，对于useReducer来说是一个action
+    hasEagerState: false, 
     eagerState: null,
-    next: (null: any),
+    next: (null: any), //指针
   };
 
   if (isRenderPhaseUpdate(fiber)) {
     enqueueRenderPhaseUpdate(queue, update);
   } else {
+    // 插入当前update
     enqueueUpdate(fiber, queue, update, lane);
 
+    // 获取workInprogress fiber
     const alternate = fiber.alternate;
+
+    // 判断当前fiber是否处于调度阶段，如果不在，则直接计算当前update计算得到的最新的state，如果跟老的state相等，则不用更新了。
     if (
       fiber.lanes === NoLanes &&
       (alternate === null || alternate.lanes === NoLanes)
@@ -2250,7 +2322,8 @@ function dispatchSetState<S, A>(
       // The queue is currently empty, which means we can eagerly compute the
       // next state before entering the render phase. If the new state is the
       // same as the current state, we may be able to bail out entirely.
-      const lastRenderedReducer = queue.lastRenderedReducer;
+
+      const lastRenderedReducer = queue.lastRenderedReducer; //获取reducer
       if (lastRenderedReducer !== null) {
         let prevDispatcher;
         if (__DEV__) {
@@ -2259,13 +2332,14 @@ function dispatchSetState<S, A>(
         }
         try {
           const currentState: S = (queue.lastRenderedState: any);
-          const eagerState = lastRenderedReducer(currentState, action);
+          const eagerState = lastRenderedReducer(currentState, action); //获取最新的值
           // Stash the eagerly computed state, and the reducer used to compute
           // it, on the update object. If the reducer hasn't changed by the
           // time we enter the render phase, then the eager state can be used
           // without calling the reducer again.
           update.hasEagerState = true;
           update.eagerState = eagerState;
+          // 如果更新后的值，跟当前的值一样，不用开启新一轮的调度
           if (is(eagerState, currentState)) {
             // Fast path. We can bail out without scheduling React to re-render.
             // It's still possible that we'll need to rebase this update later,
@@ -2282,8 +2356,12 @@ function dispatchSetState<S, A>(
         }
       }
     }
+
+    
     const eventTime = requestEventTime();
+    // 开启新的一轮调度。
     const root = scheduleUpdateOnFiber(fiber, lane, eventTime);
+
     if (root !== null) {
       entangleTransitionUpdate(root, queue, lane);
     }
