@@ -365,15 +365,17 @@ function areHookInputsEqual(
   return true;
 }
 
+// 执行函数组件
 export function renderWithHooks<Props, SecondArg>(
-  current: Fiber | null,
-  workInProgress: Fiber,
-  Component: (p: Props, arg: SecondArg) => any,
-  props: Props,
-  secondArg: SecondArg,
-  nextRenderLanes: Lanes,
+  current: Fiber | null, //current fiber
+  workInProgress: Fiber, //workInprogress fiber
+  Component: (p: Props, arg: SecondArg) => any, // 组件本身
+  props: Props, //props
+  secondArg: SecondArg, //上下文
+  nextRenderLanes: Lanes, //优先级
 ): any {
   renderLanes = nextRenderLanes;
+  // 将当前fiber赋值给currentlyRenderingFiber，hooks执行的时候通过这个获取当前的fiber对象
   currentlyRenderingFiber = workInProgress;
 
   if (__DEV__) {
@@ -387,6 +389,9 @@ export function renderWithHooks<Props, SecondArg>(
       current !== null && current.type !== workInProgress.type;
   }
 
+  // 清除fiber上面的memoizedState和updateQueue，为啥呢？因为即将执行函数组件，
+  // 函数组件的hooks对象以链表形式存放在fiber.memoizedState
+  // 函数组件的useLayoutEffect和useEffect以effects链表的形式存放在fiber.updateQueue上
   workInProgress.memoizedState = null;
   workInProgress.updateQueue = null;
   workInProgress.lanes = NoLanes;
@@ -419,12 +424,14 @@ export function renderWithHooks<Props, SecondArg>(
       ReactCurrentDispatcher.current = HooksDispatcherOnMountInDEV;
     }
   } else {
+    // 赋值hooks对象
     ReactCurrentDispatcher.current =
       current === null || current.memoizedState === null
         ? HooksDispatcherOnMount
         : HooksDispatcherOnUpdate;
   }
 
+  // 真正执行函数
   let children = Component(props, secondArg);
 
   // Check if there was a render phase update
@@ -471,6 +478,7 @@ export function renderWithHooks<Props, SecondArg>(
 
   // We can assume the previous dispatcher is always this one, since we set it
   // at the beginning of the render phase and there's no re-entrance.
+  // 重新赋值hooks对象。此时不能再调用hooks，会报错
   ReactCurrentDispatcher.current = ContextOnlyDispatcher;
 
   if (__DEV__) {
@@ -483,10 +491,11 @@ export function renderWithHooks<Props, SecondArg>(
     currentHook !== null && currentHook.next !== null;
 
   renderLanes = NoLanes;
-  currentlyRenderingFiber = (null: any);
 
-  currentHook = null;
-  workInProgressHook = null;
+  // 重新置空全局变量
+  currentlyRenderingFiber = (null: any); //指向当前的函数fiber
+  currentHook = null; //current树上的指向的当前调度的 hooks节点。
+  workInProgressHook = null; //workInProgress树上指向的当前调度的 hooks节点。
 
   if (__DEV__) {
     currentHookNameInDev = null;

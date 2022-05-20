@@ -983,6 +983,7 @@ function markRef(current: Fiber | null, workInProgress: Fiber) {
   }
 }
 
+// 更新函数组件
 function updateFunctionComponent(
   current,
   workInProgress,
@@ -1051,13 +1052,14 @@ function updateFunctionComponent(
     }
     setIsRendering(false);
   } else {
+    // 执行函数组件
     nextChildren = renderWithHooks(
-      current,
-      workInProgress,
-      Component,
-      nextProps,
-      context,
-      renderLanes,
+      current, // current fiber
+      workInProgress, //workInprogress fiber
+      Component, //函数组件本身
+      nextProps, //props
+      context, //上下文
+      renderLanes, //优先级
     );
     hasId = checkDidRenderIdHook();
   }
@@ -3929,9 +3931,10 @@ function beginWork(
         renderLanes,
       );
     }
+    // 函数组件
     case FunctionComponent: {
-      const Component = workInProgress.type;
-      const unresolvedProps = workInProgress.pendingProps;
+      const Component = workInProgress.type; // 获取函数本身 App
+      const unresolvedProps = workInProgress.pendingProps; //即将更新的props
       const resolvedProps =
         workInProgress.elementType === Component
           ? unresolvedProps
