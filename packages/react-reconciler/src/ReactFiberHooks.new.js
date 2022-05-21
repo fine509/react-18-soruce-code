@@ -793,6 +793,8 @@ function updateReducer<S, I, A>(
 ): [S, Dispatch<A>] {
   // 通过current fiber的Hooks对象，一个一个复制对应的hooks返回
   const hook = updateWorkInProgressHook();
+
+  // 获取更新队列
   const queue = hook.queue;
 
   if (queue === null) {
@@ -806,10 +808,13 @@ function updateReducer<S, I, A>(
   const current: Hook = (currentHook: any);
 
   // The last rebase update that is NOT part of the base state.
-  let baseQueue = current.baseQueue;
+  let baseQueue = current.baseQueue; //获取因为优先级较低而跳过的update链表
 
   // The last pending update that hasn't been processed yet.
-  const pendingQueue = queue.pending;
+  const pendingQueue = queue.pending; //获取当前的update任务链表
+
+  // 如果存在被跳过的链表，将跳过的链表和这次调度的任务链表首尾，即是将跳过的链表的首部连接到pendingQueue.next后面，变成第一个。
+  // 跳过的链表最后一个的next指向这次调度的任务聊表的第一个，相当于插在了头部，
   if (pendingQueue !== null) {
     // We have new updates that haven't been processed yet.
     // We'll add them to the base queue.
@@ -830,41 +835,49 @@ function updateReducer<S, I, A>(
         );
       }
     }
+    // 重置变量
     current.baseQueue = baseQueue = pendingQueue;
     queue.pending = null;
   }
 
+  //存在更新的链表。
   if (baseQueue !== null) {
     // We have a queue to process.
-    const first = baseQueue.next;
-    let newState = current.baseState;
+    const first = baseQueue.next; //获取第一额update
+    let newState = current.baseState; // 保存每一个update处理后得到的最新的state
+ 
+   let newBaseState = null;   
+   //保存着这次调度之后，fiber的最新state，跟newState不一样的是，有些update因为优先级较低被跳过，所以newBaseState的值是停留在被跳过的update的state，为的就是保证状态不丢失
 
-    let newBaseState = null;
-    let newBaseQueueFirst = null;
-    let newBaseQueueLast = null;
+
+    let newBaseQueueFirst = null; //新的需要跳过的update链表的第一个指针
+    let newBaseQueueLast = null; //新的需要跳过的update链表的最后一个指针
+
     let update = first;
+
+    // do while循环处理update
     do {
-      const updateLane = update.lane;
+      const updateLane = update.lane; //优先级
       if (!isSubsetOfLanes(renderLanes, updateLane)) {
-        // Priority is insufficient. Skip this update. If this is the first
-        // skipped update, the previous update/state is the new base
-        // update/state.
-        const clone: Update<S, A> = {
+        //优先级不足。跳过此更新。如果这是第一个跳过的更新，则先前的更新/状态是新的基础更新/状态。
+        const clone: Update<S, A> = { //clone一个Update
           lane: updateLane,
           action: update.action,
           hasEagerState: update.hasEagerState,
           eagerState: update.eagerState,
           next: (null: any),
         };
-        if (newBaseQueueLast === null) {
+        if (newBaseQueueLast === null) { //这是第一个跳过的update
           newBaseQueueFirst = newBaseQueueLast = clone;
-          newBaseState = newState;
+          newBaseState = newState; 
         } else {
+          // 不是第一个跳过的，直接插在链表后面
           newBaseQueueLast = newBaseQueueLast.next = clone;
         }
         // Update the remaining priority in the queue.
         // TODO: Don't need to accumulate this. Instead, we can remove
         // renderLanes from the original lanes.
+        // 更新队列中的剩余优先级。
         currentlyRenderingFiber.lanes = mergeLanes(
           currentlyRenderingFiber.lanes,
           updateLane,
@@ -874,6 +887,7 @@ function updateReducer<S, I, A>(
         // This update does have sufficient priority.
 
         if (newBaseQueueLast !== null) {
+          // 如果有跳过的update,为了状态的连续性，跳过的update后面的需要在当前处理的udpate都需要clone一份插入跳过的update链表后面。
           const clone: Update<S, A> = {
             // This update is going to be committed so we never want uncommit
             // it. Using NoLane works because 0 is a subset of all bitmasks, so
@@ -884,25 +898,32 @@ function updateReducer<S, I, A>(
             eagerState: update.eagerState,
             next: (null: any),
           };
+          // 插入到后面
           newBaseQueueLast = newBaseQueueLast.next = clone;
         }
 
         // Process this update.
         if (update.hasEagerState) {
-          // If this update is a state update (not a reducer) and was processed eagerly,
+          // 是否已经处理过了，
+          // 如果此更新是状态更新（不是还原器），并且热切地处理, 我们可以使用热切计算的状态(即第一个update的时候setState就会计算最新值了。)
           // we can use the eagerly computed state
           newState = ((update.eagerState: any): S);
         } else {
           const action = update.action;
+          // 通过reducer计算最新的state，赋值给newState
           newState = reducer(newState, action);
         }
       }
+
+      // 处理下一个update
       update = update.next;
     } while (update !== null && update !== first);
 
     if (newBaseQueueLast === null) {
+      //如果没有跳过的update，当前hooks.baseState才是最新的state
       newBaseState = newState;
     } else {
+      // 跳过的update链表首尾相连
       newBaseQueueLast.next = (newBaseQueueFirst: any);
     }
 
@@ -912,9 +933,10 @@ function updateReducer<S, I, A>(
       markWorkInProgressReceivedUpdate();
     }
 
+    // 将状态更新到hook对象上
     hook.memoizedState = newState;
     hook.baseState = newBaseState;
-    hook.baseQueue = newBaseQueueLast;
+    hook.baseQueue = newBaseQueueLast; //baseQueue存在跳过的update链表
 
     queue.lastRenderedState = newState;
   }
@@ -941,7 +963,7 @@ function updateReducer<S, I, A>(
   }
 
   const dispatch: Dispatch<A> = (queue.dispatch: any);
-  return [hook.memoizedState, dispatch];
+  return [hook.memoizedState, dispatch]; //这里返回的状态并不是newState,而是newBaseState
 }
 
 function rerenderReducer<S, I, A>(
@@ -1742,25 +1764,42 @@ function mountEffectImpl(fiberFlags, hookFlags, create, deps): void {
   );
 }
 
+// useEffect/useLayoutEffect update
+/**
+ * 
+ * @param {*} fiberFlags  useEffect是PassiveEffect， useLayoutEffect是UpdateEffect, 状态标识
+ * @param {*} hookFlags useEffect是HookPassive， useLayoutEffect是HookLayout
+ * @param {*} create 
+ * @param {*} deps 
+ * @returns 
+ * 
+ * useEffect/useLayoutEffect的update
+ * 1 判断依赖项是否改变，没改变只更新依赖项
+ * 2 若改变了，给fiber添加flags，用于commit阶段判断是否执行函数
+ * 3 重新赋值有falgs的effects，用于commit阶段判断是否执行
+ */
 function updateEffectImpl(fiberFlags, hookFlags, create, deps): void {
-  const hook = updateWorkInProgressHook();
-  const nextDeps = deps === undefined ? null : deps;
+  const hook = updateWorkInProgressHook(); //获取对应的hooks
+  const nextDeps = deps === undefined ? null : deps; //获取
   let destroy = undefined;
 
-  if (currentHook !== null) {
-    const prevEffect = currentHook.memoizedState;
-    destroy = prevEffect.destroy;
-    if (nextDeps !== null) {
+  if (currentHook !== null) { //当前current fiber对应的hooks
+    const prevEffect = currentHook.memoizedState; // 获取hooks上存放的effects对象
+    destroy = prevEffect.destroy; // 赋值destory函数
+    if (nextDeps !== null) { //如果有依赖项
       const prevDeps = prevEffect.deps;
       if (areHookInputsEqual(nextDeps, prevDeps)) {
+        // 判断依赖项里面的值是否一样，一样的话只更新deps。
         hook.memoizedState = pushEffect(hookFlags, create, destroy, nextDeps);
         return;
       }
     }
   }
 
+  // 不一样，标记flags，用于commit阶段执行
   currentlyRenderingFiber.flags |= fiberFlags;
 
+  // 重新赋值有flags的effects
   hook.memoizedState = pushEffect(
     HookHasEffect | hookFlags,
     create,
@@ -1795,6 +1834,7 @@ function mountEffect(
   }
 }
 
+// useEffect update
 function updateEffect(
   create: () => (() => void) | void,
   deps: Array<mixed> | void | null,
@@ -1835,6 +1875,7 @@ function mountLayoutEffect(
   return mountEffectImpl(fiberFlags, HookLayout, create, deps);
 }
 
+// layoutEffect update
 function updateLayoutEffect(
   create: () => (() => void) | void,
   deps: Array<mixed> | void | null,
@@ -1979,11 +2020,12 @@ function mountMemo<T>(
   return nextValue;
 }
 
+// useMemo update
 function updateMemo<T>(
   nextCreate: () => T,
   deps: Array<mixed> | void | null,
 ): T {
-  const hook = updateWorkInProgressHook();
+  const hook = updateWorkInProgressHook(); //赋值current fiber.memoizedState，获取最新的hooks
   const nextDeps = deps === undefined ? null : deps;
   const prevState = hook.memoizedState;
   if (prevState !== null) {
@@ -1991,10 +2033,11 @@ function updateMemo<T>(
     if (nextDeps !== null) {
       const prevDeps: Array<mixed> | null = prevState[1];
       if (areHookInputsEqual(nextDeps, prevDeps)) {
-        return prevState[0];
+        return prevState[0]; //如果依赖项相同，返回保存的第一个值
       }
     }
   }
+  //不同就需要执行函数了，然后将新的值和新的依赖保存起来。
   const nextValue = nextCreate();
   hook.memoizedState = [nextValue, nextDeps];
   return nextValue;
@@ -2185,8 +2228,10 @@ function mountRefresh() {
   return refresh;
 }
 
+// useRef update
 function updateRefresh() {
   const hook = updateWorkInProgressHook();
+  // current fiber.memoizedState保存了hooks,useRef的hook.memoizedState保存的就是第一次创建的对象，这里i直接返回对象，所以useRef永远指向的是同一个地址。
   return hook.memoizedState;
 }
 

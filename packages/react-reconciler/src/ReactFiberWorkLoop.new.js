@@ -2470,6 +2470,22 @@ function releaseRootPooledCache(root: FiberRoot, remainingLanes: Lanes) {
 }
 
 // 执行useEffect
+/**
+ * 
+ * useEffect的调度函数
+ * 执行时机：
+ * mount的时候，通过mountEffect创建effect，保存在函数fiber.updateQueue.lasteffect上面。然后更新fiber.flages，使其加上Passive的flags
+ * before-mutation阶段之前，通过scheduleCallback异步调度。优先级是普通优先级。
+ * layout阶段之后，将root赋值给rootWithPendingPassiveEffects,scheduleCallback会在合适的时机调用flushPassiveEffects函数，开始遍历effectLists。找到有flags的FIber
+ * 第一次执行的时候，effect.destory为undefined，所以不会执行。
+ * 然后执行effect.create。将返回值赋值给effect.destory。
+ * 
+ * update的时候，比如依赖一个useState，那么函数组件重新执行的时候，updateEffect会更新effects，并且赋值fiber.flags，使其加上Passive的flags
+ * 跟Mount一样的逻辑，before-mutation阶段之前异步调度，layout阶段之后赋值全局变量，scheduleCallback会在合适的时机调用flushPassiveEffects函数，开始遍历effectLists。找到有flags的FIber
+ * 先遍历处理effect.destory函数，执行，并将effect.destory重为undefined。
+ * 遍历执行effect.create函数，将返回值赋值给effect.destory。
+ * 
+ */
 export function flushPassiveEffects(): boolean {
   // Returns whether passive effects were flushed.
   // TODO: Combine this check with the one in flushPassiveEFfectsImpl. We should

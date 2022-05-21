@@ -307,6 +307,7 @@ function safelyDetachRef(current: Fiber, nearestMountedAncestor: Fiber | null) {
   }
 }
 
+// 安全调用useEffect的销毁函数
 function safelyCallDestroy(
   current: Fiber,
   nearestMountedAncestor: Fiber | null,
@@ -524,22 +525,30 @@ function commitBeforeMutationEffectsDeletion(deletion: Fiber) {
 }
 
 // 调用useEffect/useLayoutEffect的销毁函数
+/**
+ *  useEffect有依赖项的销毁逻辑，调用updateEffect更新effects。给fiber添加flags属性，等到scheduleCallback调度的时候在判断是否执行destory
+ */
 function commitHookEffectListUnmount(
-  flags: HookFlags,
-  finishedWork: Fiber,
-  nearestMountedAncestor: Fiber | null
+  flags: HookFlags, //flags
+  finishedWork: Fiber, // 当前fiber
+  nearestMountedAncestor: Fiber | null //父亲fiber
 ) {
+  // effects链表存放在fibe.updateQueue.lastEffect智商
   const updateQueue: FunctionComponentUpdateQueue | null =
     (finishedWork.updateQueue: any);
   const lastEffect = updateQueue !== null ? updateQueue.lastEffect : null;
   if (lastEffect !== null) {
+    // 获取第一个effect
     const firstEffect = lastEffect.next;
     let effect = firstEffect;
+
+    // while循环处理所有的effect
     do {
+      // 通过tag和flags判断当前执行哪种类型的effects。
       if ((effect.tag & flags) === flags) {
         // Unmount
-        const destroy = effect.destroy;
-        effect.destroy = undefined;
+        const destroy = effect.destroy; //获取销毁函数
+        effect.destroy = undefined; //重置为undefined是因为useEffect更新时候重新执行create，会重新赋值给effects.destory
         if (destroy !== undefined) {
           if (enableSchedulingProfiler) {
             if ((flags & HookPassive) !== NoHookEffect) {
@@ -549,6 +558,7 @@ function commitHookEffectListUnmount(
             }
           }
 
+          //调用销毁函数
           safelyCallDestroy(finishedWork, nearestMountedAncestor, destroy);
 
           if (enableSchedulingProfiler) {
@@ -566,11 +576,18 @@ function commitHookEffectListUnmount(
 }
 
 // 调用useEffect/ useLayoutEffect的 create
+/**
+ * 
+ * @param {*} flags 标记不同的阶段， useEffect是HookPassive | HookHasEffect， useLayoutEffect是 HookLayout | HookHasEffect。不同的flags执行不同的effects
+ * @param {*} finishedWork  //当前的fiber
+ * 
+ * 
+ * 
+ */
 function commitHookEffectListMount(flags: HookFlags, finishedWork: Fiber) {
-  // 获取任务队列
+  // 获取任务队列, effects对象保存在函数组件的fiber.updateQueue.lastEffect之上。
   const updateQueue: FunctionComponentUpdateQueue | null =
     (finishedWork.updateQueue: any);
-  // 获取lastEffect，因为useEffect的回调存储在了updateQueue.lastEffect之上
   const lastEffect = updateQueue !== null ? updateQueue.lastEffect : null;
   if (lastEffect !== null) {
     // 换装链表，next才是第一个
@@ -591,7 +608,7 @@ function commitHookEffectListMount(flags: HookFlags, finishedWork: Fiber) {
 
         // Mount 执行useLayoutEffect/useEffect的create函数
         const create = effect.create;
-        effect.destroy = create();
+        effect.destroy = create(); //将返回值赋值给effect.destroy属性
 
         if (enableSchedulingProfiler) {
           if ((flags & HookPassive) !== NoHookEffect) {
@@ -2675,15 +2692,18 @@ function reappearLayoutEffects_complete(subtreeRoot: Fiber) {
   }
 }
 
+// 执行useEffect的mounts函数
 export function commitPassiveMountEffects(
-  root: FiberRoot,
-  finishedWork: Fiber
-): void {
+  root: FiberRoot, //FiberRoot
+  finishedWork: Fiber // rootFiber
+): void { 
   nextEffect = finishedWork;
   commitPassiveMountEffects_begin(finishedWork, root);
 }
 
+
 function commitPassiveMountEffects_begin(subtreeRoot: Fiber, root: FiberRoot) {
+  // while循环找到最下面一个有flags的fiber
   while (nextEffect !== null) {
     const fiber = nextEffect;
     const firstChild = fiber.child;
@@ -2700,8 +2720,10 @@ function commitPassiveMountEffects_complete(
   subtreeRoot: Fiber,
   root: FiberRoot
 ) {
+  // while往上递归，处理所有有flags的fiber
   while (nextEffect !== null) {
     const fiber = nextEffect;
+    // 如果有passivede的flags
     if ((fiber.flags & Passive) !== NoFlags) {
       setCurrentDebugFiberInDEV(fiber);
       try {
@@ -2730,8 +2752,8 @@ function commitPassiveMountEffects_complete(
 }
 
 function commitPassiveMountOnFiber(
-  finishedRoot: FiberRoot,
-  finishedWork: Fiber
+  finishedRoot: FiberRoot, //FiberRoot
+  finishedWork: Fiber //当前的fiber, demo中是App
 ): void {
   switch (finishedWork.tag) {
     case FunctionComponent:
@@ -2832,16 +2854,19 @@ function commitPassiveMountOnFiber(
   }
 }
 
+// 调用useEffect的销毁函数
 export function commitPassiveUnmountEffects(firstChild: Fiber): void {
   nextEffect = firstChild;
   commitPassiveUnmountEffects_begin();
 }
 
 function commitPassiveUnmountEffects_begin() {
+  // while循环找到最后一个没有flags的fiber
   while (nextEffect !== null) {
     const fiber = nextEffect;
     const child = fiber.child;
 
+    // 有需要删除的flags
     if ((nextEffect.flags & ChildDeletion) !== NoFlags) {
       const deletions = fiber.deletions;
       if (deletions !== null) {
@@ -2894,8 +2919,10 @@ function commitPassiveUnmountEffects_begin() {
 }
 
 function commitPassiveUnmountEffects_complete() {
-  while (nextEffect !== null) {
+  // while循环往上走，调用父级fiber有falgs的commitPassiveUnmountOnFiber方法。
+  while (nextEffect !== null) { //App
     const fiber = nextEffect;
+    // 如果存在useEffect的flags
     if ((fiber.flags & Passive) !== NoFlags) {
       setCurrentDebugFiberInDEV(fiber);
       commitPassiveUnmountOnFiber(fiber);
@@ -2913,6 +2940,7 @@ function commitPassiveUnmountEffects_complete() {
   }
 }
 
+// 调用useEffect的销毁函数。
 function commitPassiveUnmountOnFiber(finishedWork: Fiber): void {
   switch (finishedWork.tag) {
     case FunctionComponent:
@@ -2924,6 +2952,7 @@ function commitPassiveUnmountOnFiber(finishedWork: Fiber): void {
         finishedWork.mode & ProfileMode
       ) {
         startPassiveEffectTimer();
+        // 
         commitHookEffectListUnmount(
           HookPassive | HookHasEffect,
           finishedWork,
