@@ -1261,6 +1261,7 @@ function commitUnmount(
     case ForwardRef:
     case MemoComponent:
     case SimpleMemoComponent: {
+      // 对于函数组件，取出fiber.updateQueue.lastEffect链表
       const updateQueue: FunctionComponentUpdateQueue | null =
         (current.updateQueue: any);
       if (updateQueue !== null) {
@@ -1269,13 +1270,17 @@ function commitUnmount(
           const firstEffect = lastEffect.next;
 
           let effect = firstEffect;
+          // do while循环处理effects链表
+          // 注意，这里对于函数组件没有处理useEffect的销毁，因为useEffect是异步调度的。
           do {
             // 调用useLyaoutEffect的销毁函数
             const { destroy, tag } = effect;
             if (destroy !== undefined) {
               if ((tag & HookInsertion) !== NoHookEffect) {
+                // insertionEffect的影响。
                 safelyCallDestroy(current, nearestMountedAncestor, destroy);
-              } else if ((tag & HookLayout) !== NoHookEffect) {
+              } else if ((tag & HookLayout) !== NoHookEffect) { //有useLayoutEffect的影响
+                // 执行layoutEffect的销毁函数
                 if (enableSchedulingProfiler) {
                   markComponentLayoutEffectUnmountStarted(current);
                 }
@@ -1289,7 +1294,7 @@ function commitUnmount(
                   safelyCallDestroy(current, nearestMountedAncestor, destroy);
                   recordLayoutEffectDuration(current);
                 } else {
-                  safelyCallDestroy(current, nearestMountedAncestor, destroy);
+                  safelyCallDestroy(current, nearestMountedAncestor, destroy); //
                 }
 
                 if (enableSchedulingProfiler) {
@@ -1355,6 +1360,8 @@ function commitUnmount(
   }
 }
 
+
+// 销毁生命周期函数
 function commitNestedUnmounts(
   finishedRoot: FiberRoot,
   root: Fiber,

@@ -3327,13 +3327,14 @@ function updateContextProvider(
   workInProgress: Fiber,
   renderLanes: Lanes,
 ) {
+  // 通过fiber.type获取  {type: {$$typeof, _context: context}}
   const providerType: ReactProviderType<any> = workInProgress.type;
-  const context: ReactContext<any> = providerType._context;
+  const context: ReactContext<any> = providerType._context; //获取到context对象
 
   const newProps = workInProgress.pendingProps;
   const oldProps = workInProgress.memoizedProps;
 
-  const newValue = newProps.value;
+  const newValue = newProps.value; //存放着传给儿子的value
 
   if (__DEV__) {
     if (!('value' in newProps)) {
@@ -3388,12 +3389,19 @@ function updateContextProvider(
 
 let hasWarnedAboutUsingContextAsConsumer = false;
 
+
+// beginWOrk调合Consumer
+/**
+ * 首先调用 readContext 获取最新的 value 。
+ * 然后通过 render props 函数，传入最新的 value，得到最新的 children 。
+ * 接下来调和 children 
+ */
 function updateContextConsumer(
   current: Fiber | null,
   workInProgress: Fiber,
   renderLanes: Lanes,
 ) {
-  let context: ReactContext<any> = workInProgress.type;
+  let context: ReactContext<any> = workInProgress.type; //获取context对象
   // The logic below for Context differs depending on PROD or DEV mode. In
   // DEV mode, we create a separate object for Context.Consumer that acts
   // like a proxy to Context. This proxy object adds unnecessary code in PROD
@@ -3419,8 +3427,8 @@ function updateContextConsumer(
       context = (context: any)._context;
     }
   }
-  const newProps = workInProgress.pendingProps;
-  const render = newProps.children;
+  const newProps = workInProgress.pendingProps; //即将更新的props
+  const render = newProps.children; //得到render
 
   if (__DEV__) {
     if (typeof render !== 'function') {
@@ -3433,8 +3441,14 @@ function updateContextConsumer(
     }
   }
 
-  prepareToReadContext(workInProgress, renderLanes);
+   /* 读取 context */ 
+  prepareToReadContext(workInProgress, renderLanes); 
+
+
+  // 通过context对象获取到最新的value
   const newValue = readContext(context);
+
+
   if (enableSchedulingProfiler) {
     markComponentRenderStarted(workInProgress);
   }
@@ -3445,6 +3459,7 @@ function updateContextConsumer(
     newChildren = render(newValue);
     setIsRendering(false);
   } else {
+    // 将新的context通过props传给render，得到最新的vdom
     newChildren = render(newValue);
   }
   if (enableSchedulingProfiler) {
@@ -3452,8 +3467,11 @@ function updateContextConsumer(
   }
 
   // React DevTools reads this flag.
-  workInProgress.flags |= PerformedWork;
+  workInProgress.flags |= PerformedWork; //打上标记
+
+  // 开始根据新的子vdom调和子fiber
   reconcileChildren(current, workInProgress, newChildren, renderLanes);
+  // 返回儿子
   return workInProgress.child;
 }
 

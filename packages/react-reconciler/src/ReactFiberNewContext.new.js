@@ -656,6 +656,7 @@ export function prepareToReadContext(
   }
 }
 
+// 通过context.currentValue获取最新的value
 export function readContext<T>(context: ReactContext<T>): T {
   if (__DEV__) {
     // This warning would fire if you read context inside a Hook like useMemo.
@@ -677,6 +678,8 @@ export function readContext<T>(context: ReactContext<T>): T {
   if (lastFullyObservedContext === context) {
     // Nothing to do. We already observe everything in this context.
   } else {
+    // 新的context依赖，会放入fiber.dependency，只要读取一个context，表示当前fiber依赖一个context
+    // 每依赖一个context创建一个contextItem,以链表的形式存放在fiber.dependence.firstContext上面。
     const contextItem = {
       context: ((context: any): ReactContext<mixed>),
       memoizedValue: value,

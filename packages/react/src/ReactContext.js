@@ -11,6 +11,8 @@ import {REACT_PROVIDER_TYPE, REACT_CONTEXT_TYPE} from 'shared/ReactSymbols';
 
 import type {ReactContext} from 'shared/ReactTypes';
 
+
+// 创建context
 export function createContext<T>(defaultValue: T): ReactContext<T> {
   // TODO: Second argument used to be an optional `calculateChangedBits`
   // function. Warn to reserve for future use?
@@ -22,8 +24,8 @@ export function createContext<T>(defaultValue: T): ReactContext<T> {
     // there to be two concurrent renderers at most: React Native (primary) and
     // Fabric (secondary); React DOM (primary) and React ART (secondary).
     // Secondary renderers store their context values on separate fields.
-    _currentValue: defaultValue,
-    _currentValue2: defaultValue,
+    _currentValue: defaultValue,  // 存放着context的value
+    _currentValue2: defaultValue, 
     // Used to track how many concurrent renderers this context currently
     // supports within in a single renderer. Such as parallel server rendering.
     _threadCount: 0,
@@ -36,6 +38,7 @@ export function createContext<T>(defaultValue: T): ReactContext<T> {
     _globalName: (null: any),
   };
 
+  // 转换成vdom = {type: {$$typeof, _context: context}}
   context.Provider = {
     $$typeof: REACT_PROVIDER_TYPE,
     _context: context,

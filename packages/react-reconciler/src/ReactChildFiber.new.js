@@ -1159,7 +1159,7 @@ function ChildReconciler(shouldTrackSideEffects) {
   function reconcileSingleElement(
     returnFiber: Fiber, // 父亲fiber
     currentFirstChild: Fiber | null, //current fiber上面的第一个儿子
-    element: ReactElement, //vdom
+    element: ReactElement, //当前要创建的vdom
     lanes: Lanes,
   ): Fiber {
     const key = element.key;
@@ -1310,7 +1310,7 @@ function ChildReconciler(shouldTrackSideEffects) {
             // 通过vdom创建子fiber并且关联父亲fiber
             reconcileSingleElement(
               returnFiber,
-              currentFirstChild,
+              currentFirstChild, 
               newChild,
               lanes,
             ),

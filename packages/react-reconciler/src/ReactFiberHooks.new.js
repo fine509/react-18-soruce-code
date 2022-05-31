@@ -116,6 +116,7 @@ import {now} from './Scheduler';
 
 const {ReactCurrentDispatcher, ReactCurrentBatchConfig} = ReactSharedInternals;
 
+// hooks创建的update
 type Update<S, A> = {|
   lane: Lane,
   action: A,
@@ -124,13 +125,14 @@ type Update<S, A> = {|
   next: Update<S, A>,
 |};
 
+// hook存放的updateQueue
 export type UpdateQueue<S, A> = {|
-  pending: Update<S, A> | null,
+  pending: Update<S, A> | null, //存放update任务
   interleaved: Update<S, A> | null,
-  lanes: Lanes,
-  dispatch: (A => mixed) | null,
-  lastRenderedReducer: ((S, A) => S) | null,
-  lastRenderedState: S | null,
+  lanes: Lanes, //优先级
+  dispatch: (A => mixed) | null, //setState
+  lastRenderedReducer: ((S, A) => S) | null, //上一次的reducer
+  lastRenderedState: S | null, //上一次更新的state
 |};
 
 let didWarnAboutMismatchedHooksForComponent;
@@ -139,20 +141,22 @@ if (__DEV__) {
   didWarnAboutMismatchedHooksForComponent = new Set();
 }
 
+// hooks对象
 export type Hook = {|
-  memoizedState: any,
-  baseState: any,
-  baseQueue: Update<any, any> | null,
-  queue: any,
-  next: Hook | null,
+  memoizedState: any, //存放的当前fiber的状态
+  baseState: any, // 最新的state
+  baseQueue: Update<any, any> | null, //存放跳过的update链表
+  queue: any, // 存放着updateQueue
+  next: Hook | null, //下一个指针
 |};
 
+// useEffect或者useLayoutEffect产生的effects
 export type Effect = {|
-  tag: HookFlags,
-  create: () => (() => void) | void,
-  destroy: (() => void) | void,
-  deps: Array<mixed> | null,
-  next: Effect,
+  tag: HookFlags, //标记useEffect(9)还是useLayoutEffect(5)
+  create: () => (() => void) | void, //创建函数
+  destroy: (() => void) | void, //销毁函数
+  deps: Array<mixed> | null, //依赖项
+  next: Effect, //下一个指针
 |};
 
 type StoreInstance<T> = {|
@@ -165,8 +169,9 @@ type StoreConsistencyCheck<T> = {|
   getSnapshot: () => T,
 |};
 
+// 函数组件的fiber.updateQueue，存放着一个对象，他的lastEffect存放着effect链表。而类组件的fiber.updateQueue就存放着类fiber的update链表等。
 export type FunctionComponentUpdateQueue = {|
-  lastEffect: Effect | null,
+  lastEffect: Effect | null, //effets链表
   stores: Array<StoreConsistencyCheck<any>> | null,
 |};
 
@@ -178,14 +183,14 @@ type Dispatch<A> = A => void;
 let renderLanes: Lanes = NoLanes;
 // The work-in-progress fiber. I've named it differently to distinguish it from
 // the work-in-progress hook.
-let currentlyRenderingFiber: Fiber = (null: any);
+let currentlyRenderingFiber: Fiber = (null: any); //当前调度的fiber
 
 // Hooks are stored as a linked list on the fiber's memoizedState field. The
 // current hook list is the list that belongs to the current fiber. The
 // work-in-progress hook list is a new list that will be added to the
 // work-in-progress fiber.
-let currentHook: Hook | null = null;
-let workInProgressHook: Hook | null = null;
+let currentHook: Hook | null = null; //当前current fiber上的hooks节点
+let workInProgressHook: Hook | null = null; //workInporgress fiber上的hook节点
 
 // Whether an update was scheduled at any point during the render phase. This
 // does not get reset if we do another render pass; only when we're completely
@@ -1785,7 +1790,7 @@ function updateEffectImpl(fiberFlags, hookFlags, create, deps): void {
 
   if (currentHook !== null) { //当前current fiber对应的hooks
     const prevEffect = currentHook.memoizedState; // 获取hooks上存放的effects对象
-    destroy = prevEffect.destroy; // 赋值destory函数
+    destroy = prevEffect.destroy; // 赋值destory函数，因为这个destory在更新的时候要先执行上一次的销毁函数。
     if (nextDeps !== null) { //如果有依赖项
       const prevDeps = prevEffect.deps;
       if (areHookInputsEqual(nextDeps, prevDeps)) {
@@ -1796,7 +1801,7 @@ function updateEffectImpl(fiberFlags, hookFlags, create, deps): void {
     }
   }
 
-  // 不一样，标记flags，用于commit阶段执行
+  // 不一样，标记flags，用于commit阶段判断
   currentlyRenderingFiber.flags |= fiberFlags;
 
   // 重新赋值有flags的effects
@@ -2013,11 +2018,11 @@ function mountMemo<T>(
   nextCreate: () => T,
   deps: Array<mixed> | void | null,
 ): T {
-  const hook = mountWorkInProgressHook();
-  const nextDeps = deps === undefined ? null : deps;
-  const nextValue = nextCreate();
-  hook.memoizedState = [nextValue, nextDeps];
-  return nextValue;
+  const hook = mountWorkInProgressHook(); //创建hooks
+  const nextDeps = deps === undefined ? null : deps; //获取依赖
+  const nextValue = nextCreate(); //执行函数并且返回值 
+  hook.memoizedState = [nextValue, nextDeps]; //保存值和依赖
+  return nextValue; //返回值
 }
 
 // useMemo update
@@ -2031,7 +2036,7 @@ function updateMemo<T>(
   if (prevState !== null) {
     // Assume these are defined. If they're not, areHookInputsEqual will warn.
     if (nextDeps !== null) {
-      const prevDeps: Array<mixed> | null = prevState[1];
+      const prevDeps: Array<mixed> | null = prevState[1]; //获取上一次的依赖项
       if (areHookInputsEqual(nextDeps, prevDeps)) {
         return prevState[0]; //如果依赖项相同，返回保存的第一个值
       }
@@ -2537,7 +2542,6 @@ function getCacheForType<T>(resourceType: () => T): T {
 
 export const ContextOnlyDispatcher: Dispatcher = {
   readContext,
-
   useCallback: throwInvalidHookError,
   useContext: throwInvalidHookError,
   useEffect: throwInvalidHookError,

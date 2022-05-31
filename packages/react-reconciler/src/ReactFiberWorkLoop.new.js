@@ -510,10 +510,18 @@ function requestRetryLane(fiber: Fiber) {
   return claimNextRetryLane();
 }
 
+
+/**
+ *  1 发生更新，创建update，产生优先级，调用 scheduleUpdateOnFiber开始更新，
+ * 2 scheduleUpdateOnFiber的作用就是递归向上找到rootFiber，并将沿途的fiber.childlanes更新成当前的优先级。
+ * 3 调用ensureRootIsSchedule，他最终会执行beginWork，向下调和，如果遇到fiber.childlanes===updateLanes，就表示儿子有更新，就需要继续进入。
+ * 4 如果不等于，就会退出当前节点的调度，而不再继续往下执行。
+ */
+
 // 创建Update之后，就需要开启调度更新了。
 // 做的事情：
-// 1: 通过markUpdateLaneFromFiberToRoot找到rootFiber
-// 2: 找到rootFiber之后，调用ensureRootIsScheduled开始调度
+// 1: 通过markUpdateLaneFromFiberToRoot找到rootFiber，并且更新当前fiber到rootFiber之间的所有fiber的childlanes。
+// 2: 找到rootFiber之后，调用ensureRootIsScheduled开始调度，通过fiber.childlane来判断。
 export function scheduleUpdateOnFiber(
   fiber: Fiber,
   lane: Lane,
@@ -527,7 +535,7 @@ export function scheduleUpdateOnFiber(
    */
   checkForNestedUpdates();
 
-  // 遍历找到rootFiber
+  // 递归找到rootFiber， 并且逐步根据当前的优先级，把当前fiber到RootFiber的父级链表上所有的优先级都更新了。
   const root = markUpdateLaneFromFiberToRoot(fiber, lane);
   if (root === null) {
     return null;
@@ -622,7 +630,7 @@ export function scheduleUpdateOnFiber(
       }
     }
 
-    // 开始调度
+    // 开始调度, 从rootFiber开始，是通过 childLanes 逐渐向下调和找到需要更新的组件的。
     ensureRootIsScheduled(root, eventTime);
 
     if (
@@ -669,13 +677,15 @@ export function scheduleInitialHydrationOnRoot(
 // e.g. retrying a Suspense boundary isn't an update, but it does schedule work
 // on a fiber.
 function markUpdateLaneFromFiberToRoot(
-  sourceFiber: Fiber,
-  lane: Lane
+  sourceFiber: Fiber, //当前需要更新的的fiber
+  lane: Lane //当前更新的fiber的优先级
 ): FiberRoot | null {
   // Update the source fiber's lanes
+   /* 更新当前 fiber 上 */
   sourceFiber.lanes = mergeLanes(sourceFiber.lanes, lane);
   let alternate = sourceFiber.alternate;
   if (alternate !== null) {
+    // 更新缓存树上的优先级
     alternate.lanes = mergeLanes(alternate.lanes, lane);
   }
   if (__DEV__) {
@@ -688,8 +698,10 @@ function markUpdateLaneFromFiberToRoot(
   }
   // Walk the parent path to the root and update the child lanes.
   let node = sourceFiber;
-  let parent = sourceFiber.return;
+  let parent = sourceFiber.return; //找到腹肌
   while (parent !== null) {
+    // 更新父级fiber的childLanes，
+    //react在调度的时候，如果遇到了fiber.childLanes等于当前的更新优先级updateLanes，就表示他的child链上有新的更新任务，如果不是，就会退出调和流程，做一个优化。
     parent.childLanes = mergeLanes(parent.childLanes, lane);
     alternate = parent.alternate;
     if (alternate !== null) {
@@ -701,11 +713,12 @@ function markUpdateLaneFromFiberToRoot(
         }
       }
     }
+    // 递归更新
     node = parent;
     parent = parent.return;
   }
-  if (node.tag === HostRoot) {
-    const root: FiberRoot = node.stateNode;
+  if (node.tag === HostRoot) { //如果到了FiberRoot
+    const root: FiberRoot = node.stateNode; //获取rootFiber
     return root;
   } else {
     return null;
@@ -2538,6 +2551,8 @@ export function enqueuePendingPassiveProfilerEffect(fiber: Fiber): void {
   }
 }
 
+
+// 执行useEffect的销毁和执行函数
 function flushPassiveEffectsImpl() {
   if (rootWithPendingPassiveEffects === null) {
     return false;
